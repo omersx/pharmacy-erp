@@ -1,4 +1,4 @@
-name: Release
+name: Release Pipeline
 
 on:
   push:
@@ -7,12 +7,16 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+
+env:
+  DOCKERHUB_REPO: omersx/pharmacy-erp
 
 jobs:
-  release:
-    name: Create GitHub Release
+  # ── 1. Create GitHub Release ───────────────────────────
+  github-release:
+    name: GitHub Release
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,18 +26,12 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Get the previous tag
           PREV_TAG=$(git tag --sort=-version:refname | head -n 2 | tail -n 1)
-          
           if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${{ github.ref_name }}" ]; then
-            # First release — show all commits
             CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -50)
           else
-            # Show commits since last tag
             CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
           fi
-          
-          # Write to file to handle multiline
           echo "$CHANGELOG" > /tmp/changelog.md
 
       - name: Create GitHub Release
@@ -47,3 +45,101 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 2. Publish to npm ──────────────────────────────────
+  npm-publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [github-release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set version from release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Publishing version: $VERSION"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Swap README for npm
+        run: |
+          if [ -f README.npm.md ]; then
+            mv README.npm.md README.md
+            echo "Swapped README.md with README.npm.md for registry"
+          fi
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ── 3. Build & Publish Docker Image ────────────────────
+  docker-publish:
+    name: Publish to Docker Hub
+    runs-on: ubuntu-latest
+    needs: [github-release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKERHUB_REPO }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── 4. Update Docker Hub Description ───────────────────
+  update-docker-readme:
+    name: Update Docker Hub README
+    runs-on: ubuntu-latest
+    needs: [docker-publish]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update Description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_REPO }}
+          short-description: "All-in-one image for Pharmacy ERP (Frontend, Backend & Proxy)"
+          readme-filepath: ./README.md
