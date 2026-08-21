@@ -32,7 +32,8 @@
 
 ### 🏪 Point of Sale
 - Fullscreen, keyboard-first, touch-friendly POS
-- Barcode/search product lookup
+- **Hardware & Camera Barcode Scanning** (USB/webcam/phone)
+- Auto-add to cart with audio/visual beep feedback
 - Hold & recall sales
 - Split payments (cash, card, credit)
 - Receipt printing (PDF export)

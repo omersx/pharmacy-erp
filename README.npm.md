@@ -57,7 +57,7 @@ Before running the CLI, ensure you have the following installed on your system:
 
 ## 🌐 Features of Pharmacy ERP
 
-- **Point of Sale (POS)**: Fullscreen, keyboard-first, touch-friendly POS.
+- **Point of Sale (POS)**: Fullscreen POS with **Hardware & Camera Barcode Scanning** (auto-add to cart + beep feedback).
 - **Inventory & Purchasing**: Expiry tracking, batch management, FEFO.
 - **Bilingual**: Full Arabic (RTL) & English support out of the box.
 - **Modern Tech Stack**: Next.js 15, FastAPI, Python 3.12, Tailwind CSS.
