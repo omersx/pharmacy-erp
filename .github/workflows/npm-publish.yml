@@ -42,6 +42,13 @@ jobs:
           echo "Publishing version: $VERSION"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
+      - name: Swap README for npm
+        run: |
+          if [ -f README.npm.md ]; then
+            mv README.npm.md README.md
+            echo "Swapped README.md with README.npm.md for registry"
+          fi
+
       - name: Publish to npm
         run: npm publish --provenance --access public
         env:
