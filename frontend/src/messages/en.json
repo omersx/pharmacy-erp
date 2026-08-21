@@ -1,0 +1,106 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "pos": "Point of Sale",
+    "sales": "Sales History",
+    "inventory": "Inventory",
+    "catalog": "Medicine Catalog",
+    "purchasing": "Purchasing",
+    "customers": "Customers",
+    "reports": "Reports",
+    "admin": "Settings"
+  },
+  "common": {
+    "search": "Search...",
+    "add": "Add New",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save Changes",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "noResults": "No results found."
+  },
+  "auth": {
+    "login": "Sign In",
+    "logout": "Log Out",
+    "email": "Email Address",
+    "password": "Password",
+    "welcome": "Welcome back"
+  },
+  "pos": {
+    "scanBarcode": "Scan barcode or search medicine (F2)",
+    "searchMedicine": "Search medicine",
+    "subtotal": "Subtotal",
+    "discount": "Discount (F7)",
+    "total": "Total",
+    "takePayment": "TAKE PAYMENT",
+    "completeSale": "COMPLETE SALE",
+    "holdSale": "Hold Sale",
+    "heldSales": "Held Sales",
+    "newSale": "New Sale",
+    "change": "Change",
+    "cash": "Cash",
+    "card": "Card",
+    "walkIn": "Walk-in Customer",
+    "clearCart": "Void (F10)",
+    "amountDue": "Amount Due"
+  },
+  "dashboard": {
+    "todaySales": "Today's Sales",
+    "revenue": "Revenue",
+    "lowStock": "Low Stock",
+    "expiringMedicines": "Expiring Soon",
+    "topProducts": "Top Products",
+    "recentTransactions": "Recent Transactions"
+  },
+  "medicines": {
+    "name": "Medicine Name",
+    "genericName": "Generic Name",
+    "brandName": "Brand Name",
+    "sku": "SKU",
+    "barcode": "Barcode",
+    "category": "Category",
+    "price": "Price",
+    "stock": "Stock",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "inventory": {
+    "stockOnHand": "Stock on Hand",
+    "batches": "Batches",
+    "adjustments": "Adjustments",
+    "expiring": "Expiring",
+    "lowStock": "Low Stock"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage your pharmacy system configuration",
+    "users": "Users",
+    "usersDesc": "Manage user accounts and access",
+    "roles": "Roles & Permissions",
+    "rolesDesc": "Configure role-based access control",
+    "branches": "Branches",
+    "branchesDesc": "Manage pharmacy branches",
+    "payment": "Payment Methods",
+    "paymentDesc": "Configure accepted payment methods",
+    "backup": "Backup & Restore",
+    "backupDesc": "Database backup and recovery",
+    "audit": "Audit Logs",
+    "auditDesc": "Activity and change history",
+    "system": "System Settings",
+    "systemDesc": "General system configuration",
+    "about": "About",
+    "aboutDesc": "System information and version"
+  },
+  "Notifications": {
+    "title": "Notifications",
+    "markAllAsRead": "Mark all as read",
+    "noNotifications": "No notifications",
+    "noNotificationsDesc": "You're all caught up!",
+    "delete": "Delete",
+    "justNow": "Just now",
+    "minutesAgo": "{count}m ago",
+    "hoursAgo": "{count}h ago",
+    "daysAgo": "{count}d ago"
+  }
+}

@@ -1,0 +1,30 @@
+export const DOSAGE_FORMS = [
+  { value: 'tablet', label_en: 'Tablet', label_ar: 'قرص' },
+  { value: 'capsule', label_en: 'Capsule', label_ar: 'كبسولة' },
+  { value: 'syrup', label_en: 'Syrup', label_ar: 'شراب' },
+  { value: 'suspension', label_en: 'Suspension', label_ar: 'معلق' },
+  { value: 'injection', label_en: 'Injection', label_ar: 'حقنة' },
+  { value: 'infusion', label_en: 'Infusion', label_ar: 'تسريب' },
+  { value: 'cream', label_en: 'Cream', label_ar: 'كريم' },
+  { value: 'ointment', label_en: 'Ointment', label_ar: 'مرهم' },
+  { value: 'gel', label_en: 'Gel', label_ar: 'جل' },
+  { value: 'drops', label_en: 'Drops', label_ar: 'قطرات' },
+  { value: 'eye_drops', label_en: 'Eye Drops', label_ar: 'قطرات عين' },
+  { value: 'ear_drops', label_en: 'Ear Drops', label_ar: 'قطرات أذن' },
+  { value: 'nasal_spray', label_en: 'Nasal Spray', label_ar: 'بخاخ أنف' },
+  { value: 'inhaler', label_en: 'Inhaler', label_ar: 'بخاخ' },
+  { value: 'suppository', label_en: 'Suppository', label_ar: 'تحاميل' },
+  { value: 'powder', label_en: 'Powder', label_ar: 'بودرة' },
+] as const;
+
+export const BASE_UNITS = [
+  { value: 'Pack', label_en: 'Pack', label_ar: 'عبوة' },
+  { value: 'Tablet', label_en: 'Tablet', label_ar: 'قرص' },
+  { value: 'Bottle', label_en: 'Bottle', label_ar: 'زجاجة' },
+  { value: 'Box', label_en: 'Box', label_ar: 'صندوق' },
+  { value: 'Tube', label_en: 'Tube', label_ar: 'أنبوب' },
+  { value: 'Strip', label_en: 'Strip', label_ar: 'شريط' },
+  { value: 'Vial', label_en: 'Vial', label_ar: 'قارورة' },
+  { value: 'Ampoule', label_en: 'Ampoule', label_ar: 'أمبولة' },
+  { value: 'Piece', label_en: 'Piece', label_ar: 'قطعة' },
+] as const;

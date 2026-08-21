@@ -1,0 +1,106 @@
+{
+  "nav": {
+    "dashboard": "لوحة القيادة",
+    "pos": "نقطة البيع",
+    "sales": "سجل المبيعات",
+    "inventory": "المخزون",
+    "catalog": "دليل الأدوية",
+    "purchasing": "المشتريات",
+    "customers": "العملاء",
+    "reports": "التقارير",
+    "admin": "الإعدادات"
+  },
+  "common": {
+    "search": "بحث...",
+    "add": "إضافة جديد",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "save": "حفظ التغييرات",
+    "cancel": "إلغاء",
+    "loading": "جاري التحميل...",
+    "noResults": "لم يتم العثور على نتائج."
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "welcome": "مرحباً بك مجدداً"
+  },
+  "pos": {
+    "scanBarcode": "امسح الباركود أو ابحث عن دواء (F2)",
+    "searchMedicine": "بحث عن دواء",
+    "subtotal": "المجموع الفرعي",
+    "discount": "خصم (F7)",
+    "total": "الإجمالي",
+    "takePayment": "دفع",
+    "completeSale": "إتمام البيع",
+    "holdSale": "تعليق البيع",
+    "heldSales": "المبيعات المعلقة",
+    "newSale": "بيع جديد",
+    "change": "المتبقي",
+    "cash": "نقدي",
+    "card": "بطاقة",
+    "walkIn": "عميل نقدي",
+    "clearCart": "إلغاء (F10)",
+    "amountDue": "المبلغ المستحق"
+  },
+  "dashboard": {
+    "todaySales": "مبيعات اليوم",
+    "revenue": "الإيرادات",
+    "lowStock": "نقص المخزون",
+    "expiringMedicines": "تنتهي قريباً",
+    "topProducts": "المنتجات الأكثر مبيعاً",
+    "recentTransactions": "المعاملات الأخيرة"
+  },
+  "medicines": {
+    "name": "اسم الدواء",
+    "genericName": "الاسم العلمي",
+    "brandName": "الاسم التجاري",
+    "sku": "رمز الصنف",
+    "barcode": "الباركود",
+    "category": "الفئة",
+    "price": "السعر",
+    "stock": "المخزون",
+    "status": "الحالة",
+    "actions": "إجراءات"
+  },
+  "inventory": {
+    "stockOnHand": "المخزون المتوفر",
+    "batches": "الكميات",
+    "adjustments": "التسويات",
+    "expiring": "المنتهية",
+    "lowStock": "نقص المخزون"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "subtitle": "إدارة تكوين نظام الصيدلية",
+    "users": "المستخدمون",
+    "usersDesc": "إدارة حسابات المستخدمين والوصول",
+    "roles": "الأدوار والصلاحيات",
+    "rolesDesc": "تكوين التحكم في الوصول القائم على الأدوار",
+    "branches": "الفروع",
+    "branchesDesc": "إدارة فروع الصيدلية",
+    "payment": "طرق الدفع",
+    "paymentDesc": "تكوين طرق الدفع المقبولة",
+    "backup": "النسخ الاحتياطي والاستعادة",
+    "backupDesc": "النسخ الاحتياطي واستعادة قاعدة البيانات",
+    "audit": "سجل التدقيق",
+    "auditDesc": "سجل النشاطات والتغييرات",
+    "system": "إعدادات النظام",
+    "systemDesc": "التكوين العام للنظام",
+    "about": "حول",
+    "aboutDesc": "معلومات النظام والإصدار"
+  },
+  "Notifications": {
+    "title": "الإشعارات",
+    "markAllAsRead": "تحديد الكل كمقروء",
+    "noNotifications": "لا توجد إشعارات",
+    "noNotificationsDesc": "أنت على اطلاع بكل جديد!",
+    "delete": "حذف",
+    "justNow": "الآن",
+    "minutesAgo": "منذ {count} دقيقة",
+    "hoursAgo": "منذ {count} ساعة",
+    "daysAgo": "منذ {count} يوم"
+  }
+}

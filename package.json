@@ -1,0 +1,58 @@
+{
+  "name": "pharmacy-erp",
+  "version": "1.0.0",
+  "description": "Pharmacy ERP & POS System — Enterprise-grade pharmacy management with full Arabic (RTL) and English support",
+  "scripts": {
+    "setup": "pnpm run setup:frontend && pnpm run setup:backend",
+    "setup:frontend": "cd frontend && pnpm install",
+    "setup:backend:win": "cd backend && python -m venv venv && .\\venv\\Scripts\\pip install -r requirements.txt",
+    "setup:backend:unix": "cd backend && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt",
+    "setup:backend": "node -e \"process.platform==='win32'?require('child_process').execSync('pnpm run setup:backend:win',{stdio:'inherit'}):require('child_process').execSync('pnpm run setup:backend:unix',{stdio:'inherit'})\"",
+    "dev": "concurrently -n API,WEB -c blue,green \"pnpm run dev:api\" \"pnpm run dev:web\"",
+    "dev:api:win": "cd backend && .\\venv\\Scripts\\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
+    "dev:api:unix": "cd backend && ./venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
+    "dev:api": "node -e \"process.platform==='win32'?require('child_process').execSync('pnpm run dev:api:win',{stdio:'inherit'}):require('child_process').execSync('pnpm run dev:api:unix',{stdio:'inherit'})\"",
+    "dev:web": "cd frontend && pnpm run dev",
+    "build": "cd frontend && pnpm build",
+    "seed:win": "cd backend && .\\venv\\Scripts\\python -m app.seed",
+    "seed:unix": "cd backend && ./venv/bin/python -m app.seed",
+    "seed": "node -e \"process.platform==='win32'?require('child_process').execSync('pnpm run seed:win',{stdio:'inherit'}):require('child_process').execSync('pnpm run seed:unix',{stdio:'inherit'})\"",
+    "db:migrate:win": "cd backend && .\\venv\\Scripts\\python -m alembic upgrade head",
+    "db:migrate:unix": "cd backend && ./venv/bin/python -m alembic upgrade head",
+    "db:migrate": "node -e \"process.platform==='win32'?require('child_process').execSync('pnpm run db:migrate:win',{stdio:'inherit'}):require('child_process').execSync('pnpm run db:migrate:unix',{stdio:'inherit'})\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/pharmacy-erp.git"
+  },
+  "keywords": [
+    "pharmacy",
+    "erp",
+    "pos",
+    "point-of-sale",
+    "inventory",
+    "fastapi",
+    "nextjs",
+    "react",
+    "typescript",
+    "python",
+    "arabic",
+    "rtl",
+    "bilingual",
+    "mena",
+    "healthcare"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/your-username/pharmacy-erp/issues"
+  },
+  "homepage": "https://github.com/your-username/pharmacy-erp#readme"
+}

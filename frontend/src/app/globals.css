@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #FFFFFF;
+    --foreground: #111827;
+    --surface: #F9FAFB;
+    --border: #E5E7EB;
+    
+    --brand-primary: #2A50D8;
+    --brand-hover: #213EAF;
+    --brand-active: #172C85;
+    
+    --success: #12B76A;
+    --warning: #F79009;
+    --danger: #F04438;
+    --info: #3B82F6;
+
+    --radius: 0.5rem;
+  }
+  
+  .dark {
+    --background: #0B1220;
+    --foreground: #F9FAFB;
+    --surface: #121926;
+    --border: #202939;
+
+    --brand-primary: #587CFC;
+    --brand-hover: #829DFD;
+    --brand-active: #ABBDFE;
+
+    --success: #12B76A;
+    --warning: #F79009;
+    --danger: #F04438;
+    --info: #3B82F6;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-[var(--border)];
+  }
+  body {
+    @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-600;
+}
+
+/* RTL Utilities */
+[dir="rtl"] {
+  font-family: 'Inter', system-ui, sans-serif; /* Fallback for Arabic if not using specific font */
+}
+
+/* Hide scrollbar utility for POS category bar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

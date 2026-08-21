@@ -1,0 +1,100 @@
+# ============================================================
+# Pharmacy ERP & POS — .gitignore
+# ============================================================
+
+# ----- Dependencies -----
+node_modules/
+.pnpm-store/
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# ----- Database (local SQLite) -----
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/pharmacy.db
+
+# ----- Environment -----
+.env
+.env.local
+.env.production
+.env.*.local
+
+# ----- Next.js -----
+frontend/.next/
+frontend/out/
+frontend/.vercel
+
+# ----- IDE -----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ----- OS -----
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+Icon?
+
+# ----- Logs -----
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ----- Testing -----
+coverage/
+.pytest_cache/
+htmlcov/
+.nyc_output/
+
+# ----- Build -----
+*.tsbuildinfo
+next-env.d.ts
+
+# ----- Docker -----
+docker-data/
+
+# ----- Dev / Debug scripts (not for public release) -----
+fix.py
+fix_dropdowns.py
+recover.py
+recover_frontend.js
+recover_frontend.py
+generate_test_data.py
+test_e2e.py
+backend/create_backend.py
+backend/generate_stock_file.py
+backend/seed_notifications.py
+backend/update_admin.py
+backend/test_sales_api.py
+
+# ----- Test data files -----
+test_medicines.csv
+test_medicines_300.csv
+medicines_with_stock.csv
+
+# ----- Internal planning docs -----
+parmacy-pos-erp-idea1.md
+pharmy-pos-erp-idea.md
+pos-ui.md
+
+# ----- Gemini / AI -----
+.gemini/
