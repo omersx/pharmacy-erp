@@ -129,7 +129,24 @@
 | **pnpm** | 9+ | `npm install -g pnpm` |
 | **Python** | 3.12+ | [python.org](https://python.org) |
 
-### Option A: One-Command Setup
+### Option A: Using NPX (Recommended)
+
+The easiest way to scaffold and start the project is using our interactive CLI:
+
+```bash
+# 1. Scaffold the project (clones, installs, and seeds data automatically)
+npx pharmacy-erp init
+
+# 2. Enter the directory
+cd pharmacy-erp
+
+# 3. Start the application
+npx pharmacy-erp start
+```
+
+### Option B: Using Setup Scripts
+
+If you prefer to clone manually, you can use our built-in setup scripts.
 
 <details>
 <summary><b>🪟 Windows</b></summary>
@@ -139,13 +156,6 @@ git clone https://github.com/omersx/pharmacy-erp.git
 cd pharmacy-erp
 start.bat
 ```
-
-This will automatically:
-1. Create the `.env` config file
-2. Install all frontend & backend dependencies
-3. Seed the database with demo data
-4. Start both servers
-
 </details>
 
 <details>
@@ -157,10 +167,9 @@ cd pharmacy-erp
 chmod +x start.sh
 ./start.sh
 ```
-
 </details>
 
-### Option B: Step-by-Step
+### Option C: Step-by-Step
 
 ```bash
 # 1. Clone the repository
