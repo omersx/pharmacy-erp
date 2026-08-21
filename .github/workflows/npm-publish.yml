@@ -3,6 +3,12 @@ name: npm Publish
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version to publish (e.g. 1.0.0)"
+        required: true
+        default: "1.0.0"
 
 jobs:
   publish:
@@ -28,7 +34,11 @@ jobs:
 
       - name: Set version from release tag
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
           echo "Publishing version: $VERSION"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
