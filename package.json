@@ -2,8 +2,12 @@
   "name": "pharmacy-erp",
   "version": "1.0.0",
   "description": "Pharmacy ERP & POS System — Enterprise-grade pharmacy management with full Arabic (RTL) and English support",
+  "bin": {
+    "pharmacy-erp": "./bin/cli.js"
+  },
   "author": "omersx",
   "files": [
+    "bin/**",
     "backend/app/**",
     "backend/requirements.txt",
     "backend/Dockerfile",
