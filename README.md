@@ -449,7 +449,6 @@ Please read our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE
 ## 🗺️ Roadmap
 
 - [ ] 📱 Mobile app (React Native)
-- [ ] 🔌 Barcode scanner hardware integration
 - [ ] 📊 Advanced analytics dashboard
 - [ ] 🏥 Insurance claims module
 - [ ] 💳 Payment gateway integration
