@@ -8,8 +8,10 @@ import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { BarcodeScanner } from '@/components/ui/barcode-scanner';
+import { useScanFeedback } from '@/components/ui/scan-feedback';
 import { toast } from 'react-hot-toast';
-import { Search, Plus, Edit, Trash2, Package, Pill, Beaker, Tag, DollarSign, Archive, AlertCircle, ChevronDown, Upload } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Package, Pill, Beaker, Tag, DollarSign, Archive, AlertCircle, ChevronDown, Upload, Camera } from 'lucide-react';
 import { BulkImportModal } from '@/components/ui/bulk-import-modal';
 import { cn } from '@/lib/utils';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
@@ -32,10 +34,12 @@ export default function ProductsPage() {
 
   const [slideOpen, setSlideOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: '', name: '' });
   const [isSaving, setIsSaving] = useState(false);
+  const { playSuccess, playError } = useScanFeedback();
   
   // Form State
   const defaultForm = {
@@ -521,13 +525,23 @@ export default function ProductsPage() {
                     className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground font-mono focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 relative">
                   <label className="text-sm text-muted-foreground">Barcode</label>
-                  <input 
-                    type="text" 
-                    value={formData.barcode} onChange={e => setFormData({...formData, barcode: e.target.value})}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground font-mono focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  />
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={formData.barcode} onChange={e => setFormData({...formData, barcode: e.target.value})}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground font-mono focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setScannerOpen(true)}
+                      className="shrink-0 p-2 border border-border rounded-lg hover:bg-surface text-brand-500 transition-colors"
+                      title="Scan Barcode"
+                    >
+                      <Camera size={20} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -747,6 +761,26 @@ export default function ProductsPage() {
         open={importModalOpen}
         onOpenChange={setImportModalOpen}
         onImportComplete={fetchData}
+      />
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScanner
+        isOpen={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        title="Scan Barcode / QR Code"
+        onScan={(code) => {
+          setScannerOpen(false);
+          // Check if barcode already exists in loaded medicines
+          const exists = medicines.find(m => m.barcode === code);
+          if (exists) {
+            playError();
+            toast.error(`Barcode belongs to existing medicine: ${exists.name_en}`);
+          } else {
+            playSuccess();
+            setFormData(prev => ({ ...prev, barcode: code }));
+            toast.success("Barcode filled!");
+          }
+        }}
       />
     </div>
   );

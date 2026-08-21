@@ -12,11 +12,15 @@ import PaymentSettingsModal from '@/components/pos/PaymentSettingsModal';
 import { CashSessionGuard } from '@/components/pos/CashSessionGuard';
 import { CloseSessionModal } from '@/components/pos/CloseSessionModal';
 import { SaleReceipt } from '@/components/pos/SaleReceipt';
+import { BarcodeScanner } from '@/components/ui/barcode-scanner';
+import { useScanFeedback } from '@/components/ui/scan-feedback';
+import { useBarcodeScanner } from '@/hooks/use-barcode-scanner';
 import type { Product } from '@/components/pos/ProductCatalog';
 import {
   Menu,
   Search,
   ScanBarcode,
+  Camera,
   ChevronDown,
   User,
   X,
@@ -49,6 +53,9 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
   // Receipt State
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [saleReceiptData, setSaleReceiptData] = useState<any>(null);
+
+  // Camera Scanner State
+  const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -154,82 +161,99 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
     [addItem]
   );
 
-  // Barcode Scanner Listener (Detect hardware scanners fast-typing + enter)
-  useEffect(() => {
-    let barcodeBuffer = '';
-    let lastKeyTime = Date.now();
+  // Scan feedback (beep sounds + visual flash)
+  const { playSuccess, playError, flashElement } = useScanFeedback();
 
+  // Shared barcode scan handler (used by both USB scanner and camera scanner)
+  const handleBarcodeScan = useCallback(
+    (scannedCode: string) => {
+      // First, try local lookup by product ID or barcode
+      const found = products.find(
+        (p) =>
+          p.id === scannedCode ||
+          p.name.toLowerCase() === scannedCode.toLowerCase()
+      );
+
+      if (found) {
+        handleProductClick(found);
+        playSuccess();
+        flashElement('green', searchInputRef.current);
+        toast.success(`✅ Scanned: ${found.name}`);
+        return;
+      }
+
+      // Fallback: search via API (matches barcode field in database)
+      api
+        .searchMedicines(scannedCode)
+        .then((res: any) => {
+          if (Array.isArray(res) && res.length > 0) {
+            const match = products.find((p) => p.medicine_id === res[0].id);
+            if (match) {
+              handleProductClick(match);
+              playSuccess();
+              flashElement('green', searchInputRef.current);
+              toast.success(`✅ Scanned: ${match.name}`);
+            } else {
+              playError();
+              flashElement('red', searchInputRef.current);
+              toast.error(`Scanned item not in stock catalog`);
+            }
+          } else {
+            playError();
+            flashElement('red', searchInputRef.current);
+            toast.error(`Barcode not found: ${scannedCode}`);
+          }
+        })
+        .catch(() => {
+          playError();
+          flashElement('red', searchInputRef.current);
+          toast.error(`Product not found for code: ${scannedCode}`);
+        });
+    },
+    [products, handleProductClick, playSuccess, playError, flashElement]
+  );
+
+  // USB/Bluetooth hardware barcode scanner hook
+  useBarcodeScanner({
+    onScan: handleBarcodeScan,
+    enabled: !paymentMode && !cameraScannerOpen,
+  });
+
+  // Camera scanner callback
+  const handleCameraScan = useCallback(
+    (code: string) => {
+      setCameraScannerOpen(false);
+      handleBarcodeScan(code);
+    },
+    [handleBarcodeScan]
+  );
+
+  // Keyboard shortcuts (F2 = search, F4 = camera, F9 = payment, Escape)
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Global keyboard shortcuts
       if (e.key === 'F2') {
         e.preventDefault();
         searchInputRef.current?.focus();
-        return;
+      }
+      if (e.key === 'F4') {
+        e.preventDefault();
+        setCameraScannerOpen(true);
       }
       if (e.key === 'F9' && cart.length > 0) {
         e.preventDefault();
         setPaymentMode(true);
-        return;
       }
       if (e.key === 'Escape') {
+        if (cameraScannerOpen) setCameraScannerOpen(false);
         if (paymentMode) setPaymentMode(false);
         if (showDropdown) setShowDropdown(false);
         if (userMenuOpen) setUserMenuOpen(false);
-        return;
-      }
-
-      // If user is focused on an input/textarea (not scanning outside), skip global barcode hook
-      const activeTag = document.activeElement?.tagName.toLowerCase();
-      const isInputActive = activeTag === 'input' || activeTag === 'textarea';
-
-      const currentTime = Date.now();
-      const timeDiff = currentTime - lastKeyTime;
-      lastKeyTime = currentTime;
-
-      // Barcode scanners usually send characters within 30-50ms of each other
-      if (timeDiff > 80) {
-        barcodeBuffer = '';
-      }
-
-      if (e.key === 'Enter') {
-        if (barcodeBuffer.length >= 3) {
-          e.preventDefault();
-          const scannedCode = barcodeBuffer.trim();
-          barcodeBuffer = '';
-          
-          // Look up scanned barcode in products list or via API search
-          const found = products.find(p => p.id === scannedCode || p.name.toLowerCase() === scannedCode.toLowerCase());
-          if (found) {
-            handleProductClick(found);
-            toast.success(`Scanned: ${found.name}`);
-          } else {
-            api.searchMedicines(scannedCode)
-              .then((res: any) => {
-                if (Array.isArray(res) && res.length > 0) {
-                  const match = products.find(p => p.medicine_id === res[0].id);
-                  if (match) {
-                    handleProductClick(match);
-                    toast.success(`Scanned: ${match.name}`);
-                  } else {
-                    toast.error(`Scanned item not in stock catalog`);
-                  }
-                } else {
-                  toast.error(`Barcode not found: ${scannedCode}`);
-                }
-              })
-              .catch(() => {
-                toast.error(`Product not found for code: ${scannedCode}`);
-              });
-          }
-        }
-      } else if (e.key.length === 1 && !isInputActive) {
-        barcodeBuffer += e.key;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart.length, paymentMode, showDropdown, userMenuOpen, products, handleProductClick]);
+  }, [cart.length, paymentMode, showDropdown, userMenuOpen, cameraScannerOpen]);
 
   // Click outside to close dropdowns
   useEffect(() => {
@@ -331,9 +355,17 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
           </button>
 
           <button 
+            onClick={() => setCameraScannerOpen(true)}
+            className="p-1.5 md:p-2 bg-transparent border border-border rounded-lg text-foreground hover:bg-surface transition-colors shrink-0"
+            title="Scan with Camera (F4)"
+          >
+            <Camera size={18} className="md:w-5 md:h-5 text-brand-500" />
+          </button>
+
+          <button 
             onClick={() => searchInputRef.current?.focus()}
             className="p-1.5 md:p-2 bg-transparent border border-border rounded-lg text-foreground hover:bg-surface transition-colors shrink-0"
-            title="Scan Barcode (Focus Search)"
+            title="Focus Barcode Search (F2)"
           >
             <ScanBarcode size={18} className="md:w-5 md:h-5" />
           </button>
@@ -440,11 +472,22 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
         onClose={() => setSettingsOpen(false)}
       />
 
-      {/* ===== SALE RECEIPT MODAL ===== */}
+      {/* Payment Success Receipt */}
       <SaleReceipt
         open={receiptOpen}
-        onClose={() => setReceiptOpen(false)}
+        onClose={() => {
+          setReceiptOpen(false);
+          setSaleReceiptData(null);
+        }}
         saleData={saleReceiptData}
+      />
+
+      {/* Camera Barcode Scanner */}
+      <BarcodeScanner
+        isOpen={cameraScannerOpen}
+        onClose={() => setCameraScannerOpen(false)}
+        onScan={handleCameraScan}
+        title="Scan Product Barcode"
       />
 
       {/* ===== CLOSE REGISTER MODAL ===== */}
