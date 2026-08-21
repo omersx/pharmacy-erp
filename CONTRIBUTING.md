@@ -19,14 +19,14 @@ This project and everyone participating in it is governed by our [Code of Conduc
 
 ### 🐛 Reporting Bugs
 
-- Use the [Bug Report](https://github.com/your-username/pharmacy-erp/issues/new?template=bug_report.md) issue template
+- Use the [Bug Report](https://github.com/omersx/pharmacy-erp/issues/new?template=bug_report.md) issue template
 - Include steps to reproduce, expected vs actual behavior
 - Add screenshots if applicable
 - Mention your OS, browser, and Node.js/Python versions
 
 ### 💡 Suggesting Features
 
-- Use the [Feature Request](https://github.com/your-username/pharmacy-erp/issues/new?template=feature_request.md) issue template
+- Use the [Feature Request](https://github.com/omersx/pharmacy-erp/issues/new?template=feature_request.md) issue template
 - Explain the use case and why it would benefit pharmacies
 - If possible, include mockups or examples
 
@@ -45,7 +45,7 @@ This project and everyone participating in it is governed by our [Code of Conduc
 
 ```bash
 # Fork and clone the repo
-git clone https://github.com/your-username/pharmacy-erp.git
+git clone https://github.com/omersx/pharmacy-erp.git
 cd pharmacy-erp
 
 # Install dependencies

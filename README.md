@@ -132,7 +132,7 @@
 <summary><b>🪟 Windows</b></summary>
 
 ```batch
-git clone https://github.com/your-username/pharmacy-erp.git
+git clone https://github.com/omersx/pharmacy-erp.git
 cd pharmacy-erp
 start.bat
 ```
@@ -149,7 +149,7 @@ This will automatically:
 <summary><b>🐧 Linux / 🍎 macOS</b></summary>
 
 ```bash
-git clone https://github.com/your-username/pharmacy-erp.git
+git clone https://github.com/omersx/pharmacy-erp.git
 cd pharmacy-erp
 chmod +x start.sh
 ./start.sh
@@ -161,7 +161,7 @@ chmod +x start.sh
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/pharmacy-erp.git
+git clone https://github.com/omersx/pharmacy-erp.git
 cd pharmacy-erp
 
 # 2. Install root dependencies (concurrently)
