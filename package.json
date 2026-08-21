@@ -4,7 +4,7 @@
   "description": "Pharmacy ERP & POS System — Enterprise-grade pharmacy management with full Arabic (RTL) and English support",
   "scripts": {
     "setup": "pnpm run setup:frontend && pnpm run setup:backend",
-    "setup:frontend": "cd frontend && pnpm install",
+    "setup:frontend": "cd frontend && pnpm install --force --no-frozen-lockfile",
     "setup:backend:win": "cd backend && python -m venv venv && .\\venv\\Scripts\\pip install -r requirements.txt",
     "setup:backend:unix": "cd backend && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt",
     "setup:backend": "node -e \"process.platform==='win32'?require('child_process').execSync('pnpm run setup:backend:win',{stdio:'inherit'}):require('child_process').execSync('pnpm run setup:backend:unix',{stdio:'inherit'})\"",
