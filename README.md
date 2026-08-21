@@ -9,6 +9,9 @@
 *Full Arabic (RTL) & English support · Designed for the Gulf/MENA market*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/omersx/pharmacy-erp/actions/workflows/ci.yml/badge.svg)](https://github.com/omersx/pharmacy-erp/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/badge/Docker_Hub-images-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/u/omersx)
+[![npm](https://img.shields.io/npm/v/pharmacy-erp?color=CB3837&logo=npm)](https://www.npmjs.com/package/pharmacy-erp)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Node.js 18+](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -348,26 +351,29 @@ Once the backend is running, interactive API documentation is available at:
 
 ## 🐳 Docker Deployment
 
-### Quick Deploy
+### Quick Deploy (from Docker Hub)
 
 ```bash
-# Build and start all services
+# Pull pre-built images and start
 docker compose up -d
 
 # This starts:
 #   - FastAPI backend  → port 8000
 #   - Next.js frontend → port 3000
+#   - Nginx proxy      → port 80
 ```
 
-### Production with Nginx
-
-For a production deployment with Nginx reverse proxy:
+Or pull images individually:
 
 ```bash
-# Update docker-compose.yml to include nginx service
-# See nginx/nginx.conf for the reverse proxy configuration
+docker pull omersx/pharmacy-erp-backend:latest
+docker pull omersx/pharmacy-erp-frontend:latest
+```
 
-docker compose -f docker-compose.yml up -d
+### Build from Source (for contributors)
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
 ```
 
 ### Production Checklist

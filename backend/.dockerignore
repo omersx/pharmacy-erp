@@ -1,0 +1,42 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+.venv/
+*.egg-info/
+
+# Database
+data/*.db
+data/*.db-journal
+data/*.db-wal
+pharmacy.db
+
+# Dev/debug scripts
+create_backend.py
+generate_stock_file.py
+seed_notifications.py
+update_admin.py
+test_sales_api.py
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+.pytest_cache/
+htmlcov/
+coverage/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Docs
+*.md

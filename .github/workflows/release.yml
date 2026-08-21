@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git tag --sort=-version:refname | head -n 2 | tail -n 1)
+          
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "${{ github.ref_name }}" ]; then
+            # First release — show all commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -50)
+          else
+            # Show commits since last tag
+            CHANGELOG=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # Write to file to handle multiline
+          echo "$CHANGELOG" > /tmp/changelog.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Pharmacy ERP ${{ github.ref_name }}"
+          body_path: /tmp/changelog.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

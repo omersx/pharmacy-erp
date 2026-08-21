@@ -1,0 +1,42 @@
+# ============================================================
+# Pharmacy ERP — Development Docker Compose
+# Builds from local source code (for contributors)
+# ============================================================
+# Usage:
+#   docker compose -f docker-compose.dev.yml up --build
+# ============================================================
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pharmacy-erp-backend-dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      - DATABASE_URL=sqlite+aiosqlite:///./data/pharmacy.db
+      - SECRET_KEY=dev-secret-key-change-in-production-minimum-32-characters-long
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+    volumes:
+      - backend_data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pharmacy-erp-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      - backend
+
+volumes:
+  backend_data:
+    driver: local
