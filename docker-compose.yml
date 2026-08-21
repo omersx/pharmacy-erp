@@ -1,58 +1,20 @@
 # ============================================================
 # Pharmacy ERP — Production Docker Compose
-# Uses pre-built images from Docker Hub
+# Uses the official all-in-one image from Docker Hub
 # ============================================================
 # Usage:
 #   docker compose up -d
-#
-# Prerequisites:
-#   Copy .env.example to .env and update values
 # ============================================================
 
 services:
-  backend:
-    image: omersx/pharmacy-erp-backend:latest
-    container_name: pharmacy-erp-backend
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      - APP_ENV=production
-      - DEBUG=false
-    volumes:
-      - backend_data:/app/data
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  frontend:
-    image: omersx/pharmacy-erp-frontend:latest
-    container_name: pharmacy-erp-frontend
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-    depends_on:
-      backend:
-        condition: service_healthy
-
-  nginx:
-    image: nginx:alpine
-    container_name: pharmacy-erp-nginx
+  pharmacy-erp:
+    image: omersx/pharmacy-erp:latest
+    container_name: pharmacy-erp
     restart: unless-stopped
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - backend
-      - frontend
+      - backend_data:/app/backend/data
 
 volumes:
   backend_data:

@@ -362,22 +362,16 @@ Once the backend is running, interactive API documentation is available at:
 
 ### Quick Deploy (from Docker Hub)
 
-```bash
-# Pull pre-built images and start
-docker compose up -d
-
-# This starts:
-#   - FastAPI backend  → port 8000
-#   - Next.js frontend → port 3000
-#   - Nginx proxy      → port 80
-```
-
-Or pull images individually:
+The easiest way to run the entire system (Frontend, Backend, and Proxy) is using our official all-in-one image:
 
 ```bash
-docker pull omersx/pharmacy-erp-backend:latest
-docker pull omersx/pharmacy-erp-frontend:latest
+docker run -d \
+  --name pharmacy-erp \
+  -p 80:80 \
+  omersx/pharmacy-erp:latest
 ```
+
+This starts the entire application on port 80. You can now access it at `http://localhost`.
 
 ### Build from Source (for contributors)
 

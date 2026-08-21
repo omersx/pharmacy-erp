@@ -235,7 +235,7 @@ function cmdDocker() {
   }
 
   try {
-    const child = spawn("docker", ["compose", "up", "-d"], {
+    const child = spawn("docker", ["run", "-it", "-p", "80:80", "--name", "pharmacy-erp", "omersx/pharmacy-erp:latest"], {
       cwd: process.cwd(),
       stdio: "inherit",
       shell: true,

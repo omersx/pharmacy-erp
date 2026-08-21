@@ -43,7 +43,7 @@ You can run these commands via `npx pharmacy-erp <command>` or inside your proje
 | `start` | Starts the frontend and backend development servers simultaneously. |
 | `setup` | Installs all required Node.js and Python dependencies. |
 | `seed` | Seeds the database with demo products, users, and transactions. |
-| `docker` | Starts the application in production mode using Docker Compose. |
+| `docker` | Starts the application in production mode using the official all-in-one Docker image. |
 | `help` | Shows the help menu with all available commands. |
 
 ## 📦 Prerequisites
