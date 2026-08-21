@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/omersx/pharmacy-erp/main/img/logo.png" alt="Pharmacy ERP Logo" width="120" />
+
 # Pharmacy ERP & POS System (CLI)
 
 **The interactive CLI to scaffold and launch the Pharmacy ERP system.**
