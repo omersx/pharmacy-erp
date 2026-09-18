@@ -11,6 +11,7 @@ import uuid
 from typing import List, Optional
 
 from app.modules.organizations.models import Branch
+from datetime import datetime
 
 router = APIRouter(tags=["Sales"])
 
@@ -44,6 +45,18 @@ async def list_sales(
         query = query.where(Sale.status == status)
     if search:
         query = query.where(Sale.invoice_number.ilike(f"%{search}%"))
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            query = query.where(Sale.created_at >= start_dt)
+        except Exception:
+            pass
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            query = query.where(Sale.created_at <= end_dt)
+        except Exception:
+            pass
         
     result = await db.execute(query)
     return result.scalars().all()

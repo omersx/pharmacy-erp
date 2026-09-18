@@ -508,7 +508,7 @@ async def bulk_import_medicines(
                     manufacturer=row.get('manufacturer'),
                     description=row.get('description'),
                     units_per_pack=parse_int(row.get('units_per_pack'), 1),
-                    reorder_level=parse_int(row.get('reorder_level'), 0),
+                    reorder_level=parse_int(row.get('reorder_level'), 10),
                     max_stock=parse_int(row.get('max_stock'), 0),
                     requires_prescription=parse_bool(row.get('requires_prescription')),
                     is_controlled=parse_bool(row.get('is_controlled')),

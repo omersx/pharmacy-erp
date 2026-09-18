@@ -50,8 +50,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={loading || props.disabled}
         {...props}
       >
-        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {!loading && leadingIcon && <span className="mr-2">{leadingIcon}</span>}
+        {loading && <Loader2 className="mr-2 rtl:mr-0 rtl:ml-2 h-4 w-4 animate-spin flex-shrink-0" />}
+        {!loading && leadingIcon && <span className="mr-2 rtl:mr-0 rtl:ml-2 flex-shrink-0">{leadingIcon}</span>}
         {children}
       </button>
     );

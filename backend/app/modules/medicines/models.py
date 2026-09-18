@@ -33,7 +33,7 @@ class Medicine(Base):
     requires_prescription: Mapped[bool] = mapped_column(Boolean, default=False)
     is_controlled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_cold_chain: Mapped[bool] = mapped_column(Boolean, default=False)
-    reorder_level: Mapped[int] = mapped_column(Integer, default=0)
+    reorder_level: Mapped[int] = mapped_column(Integer, default=10)
     max_stock: Mapped[int] = mapped_column(Integer, default=0)
     selling_price: Mapped[float] = mapped_column(Numeric(10, 2))
     image_url: Mapped[str] = mapped_column(String, nullable=True)

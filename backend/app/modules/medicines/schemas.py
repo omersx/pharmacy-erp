@@ -50,7 +50,7 @@ class MedicineCreate(BaseModel):
     requires_prescription: bool = False
     is_controlled: bool = False
     is_cold_chain: bool = False
-    reorder_level: int = 0
+    reorder_level: int = 10
     max_stock: int = 0
     image_url: Optional[str] = None
 

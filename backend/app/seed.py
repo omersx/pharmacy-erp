@@ -180,96 +180,105 @@ async def seed():
             level_2_cats[en] = c
         await db.commit()
 
-        # Suppliers
-        sup_names = ["Al-Dawaa Medical", "Nahdi Wholesale", "Gulf Pharma Supply"]
-        suppliers = []
-        for name in sup_names:
-            s = Supplier(name=name, contact_person="John Doe", phone="0500000000", email="sup@example.com")
-            db.add(s)
-            suppliers.append(s)
-        await db.commit()
+        print("Successfully initialized core system: roles, branches, and categories.")
 
-        # Customers
-        cust_names = [("Mohammed Al-Rashid", "محمد الراشد"), ("Fatima Al-Zahrani", "فاطمة الزهراني")]
-        customers = []
-        for en, ar in cust_names:
-            c = Customer(name=en, name_ar=ar, phone="0511111111")
-            db.add(c)
-            customers.append(c)
-        await db.commit()
+        # Seed sample demo medicines and transactions ONLY if explicitly requested via --demo
+        import sys
+        if "--demo" in sys.argv:
+            print("Seeding sample demo medicines and batches...")
+            await seed_demo_data(db, level_2_cats)
+        else:
+            print("Clean catalog ready (0 medicines). Use --demo to populate sample items.")
 
-        # Medicines
-        meds_data = [
-            ("Panadol", "بانادول", "Paracetamol", "Panadol", "500mg", "Tablet", "GSK", "Pain Relief / Analgesics", 15.0),
-            ("Amoxil", "أموكسيل", "Amoxicillin", "Amoxil", "500mg", "Capsule", "GSK", "Antibiotics", 25.5),
-            ("Augmentin", "أوجمنتين", "Amoxicillin/Clavulanate", "Augmentin", "1g", "Tablet", "GSK", "Antibiotics", 80.0),
-            ("Brufen", "بروفين", "Ibuprofen", "Brufen", "400mg", "Tablet", "Abbott", "Anti-inflammatory", 12.0),
-            ("Voltaren", "فولتارين", "Diclofenac", "Voltaren", "50mg", "Tablet", "Novartis", "Anti-inflammatory", 18.0),
-            ("Zyrtec", "زيرتيك", "Cetirizine", "Zyrtec", "10mg", "Tablet", "UCB Pharma", "Antihistamines", 22.0),
-            ("Crestor", "كريستور", "Rosuvastatin", "Crestor", "10mg", "Tablet", "AstraZeneca", "Cardiovascular", 150.0),
-            ("Lipitor", "ليبيتور", "Atorvastatin", "Lipitor", "20mg", "Tablet", "Pfizer", "Cardiovascular", 120.0),
-            ("Ventolin", "فنتولين", "Salbutamol", "Ventolin", "100mcg", "Inhaler", "GSK", "Respiratory", 35.0),
-            ("Nexium", "نيكسيوم", "Esomeprazole", "Nexium", "40mg", "Capsule", "AstraZeneca", "Gastrointestinal", 65.0),
-            ("Glucophage", "جلوكوفاج", "Metformin", "Glucophage", "500mg", "Tablet", "Merck", "Antidiabetics", 15.0),
-            ("Concor", "كونكور", "Bisoprolol", "Concor", "5mg", "Tablet", "Merck", "Hypertension", 40.0),
-            ("Losartan", "لوسارتان", "Losartan", "Losartan", "50mg", "Tablet", "MSD", "Hypertension", 30.0),
-            ("Omeprazole", "أوميبرازول", "Omeprazole", "Omeprazole", "20mg", "Capsule", "Various", "Gastrointestinal", 45.0),
-            ("Aspirin", "أسبرين", "Acetylsalicylic Acid", "Aspirin", "100mg", "Tablet", "Bayer", "Cardiovascular", 10.0),
-            ("Cetrizine", "سيتريزين", "Cetirizine", "Cetrizine", "10mg", "Syrup", "Various", "Antihistamines", 14.0),
-            ("Metformin XR", "ميتفورمين", "Metformin", "Metformin XR", "1000mg", "Tablet", "Merck", "Antidiabetics", 12.0),
-            ("Amlodipine", "أملوديبين", "Amlodipine", "Amlodipine", "5mg", "Tablet", "Pfizer", "Hypertension", 28.0),
-            ("Azithromycin", "أزيثروميسين", "Azithromycin", "Azithromycin", "500mg", "Tablet", "Pfizer", "Antibiotics", 55.0),
-            ("Ibuprofen Susp", "إيبوبروفين", "Ibuprofen", "Ibuprofen Susp", "100mg/5ml", "Suspension", "Abbott", "Paediatrics", 11.0)
-        ]
+async def seed_demo_data(db, level_2_cats):
+    # Suppliers
+    sup_names = ["Al-Dawaa Medical", "Nahdi Wholesale", "Gulf Pharma Supply"]
+    suppliers = []
+    for name in sup_names:
+        s = Supplier(name=name, contact_person="John Doe", phone="0500000000", email="sup@example.com")
+        db.add(s)
+        suppliers.append(s)
+    await db.commit()
 
-        medicines = []
-        for idx, (en, ar, gen, brand, st, form, man, cat_key, price) in enumerate(meds_data):
-            m = Medicine(
-                sku=f"SKU{idx:04d}",
-                barcode=f"123456789{idx:03d}",
-                name_en=en,
-                name_ar=ar,
-                generic_name=gen,
-                brand_name=brand,
-                strength=st,
-                dosage_form=form,
-                manufacturer=man,
-                category_id=level_2_cats[cat_key].id,
-                base_unit="Pack",
-                selling_price=price,
-                reorder_level=10
-            )
-            db.add(m)
-            medicines.append(m)
-        await db.commit()
+    # Customers
+    cust_names = [("Mohammed Al-Rashid", "محمد الراشد"), ("Fatima Al-Zahrani", "فاطمة الزهراني")]
+    customers = []
+    for en, ar in cust_names:
+        c = Customer(name=en, name_ar=ar, phone="0511111111")
+        db.add(c)
+        customers.append(c)
+    await db.commit()
 
-        # Batches
-        now = datetime.utcnow()
-        for idx, m in enumerate(medicines):
-            b1 = MedicineBatch(
-                medicine_id=m.id,
-                batch_number=f"BATCH-A-{idx}",
-                production_date=now - timedelta(days=120), # approx 6 months before expiry (if expiry is +60 days)
-                expiry_date=now + timedelta(days=60),
-                purchase_price=float(m.selling_price) * 0.7,
-                quantity_received=50,
-                quantity_remaining=50,
-                supplier_id=suppliers[0].id
-            )
-            b2 = MedicineBatch(
-                medicine_id=m.id,
-                batch_number=f"BATCH-B-{idx}",
-                production_date=now - timedelta(days=185), # approx 6 months before expiry (if expiry is +180 days)
-                expiry_date=now + timedelta(days=180),
-                purchase_price=float(m.selling_price) * 0.7,
-                quantity_received=100,
-                quantity_remaining=100,
-                supplier_id=suppliers[1].id
-            )
-            db.add_all([b1, b2])
-        await db.commit()
+    # Medicines
+    meds_data = [
+        ("Panadol", "بانادول", "Paracetamol", "Panadol", "500mg", "Tablet", "GSK", "Pain Relief / Analgesics", 15.0),
+        ("Amoxil", "أموكسيل", "Amoxicillin", "Amoxil", "500mg", "Capsule", "GSK", "Antibiotics", 25.5),
+        ("Augmentin", "أوجمنتين", "Amoxicillin/Clavulanate", "Augmentin", "1g", "Tablet", "GSK", "Antibiotics", 80.0),
+        ("Brufen", "بروفين", "Ibuprofen", "Brufen", "400mg", "Tablet", "Abbott", "Anti-inflammatory", 12.0),
+        ("Voltaren", "فولتارين", "Diclofenac", "Voltaren", "50mg", "Tablet", "Novartis", "Anti-inflammatory", 18.0),
+        ("Zyrtec", "زيرتيك", "Cetirizine", "Zyrtec", "10mg", "Tablet", "UCB Pharma", "Antihistamines", 22.0),
+        ("Crestor", "كريستور", "Rosuvastatin", "Crestor", "10mg", "Tablet", "AstraZeneca", "Cardiovascular", 150.0),
+        ("Lipitor", "ليبيتور", "Atorvastatin", "Lipitor", "20mg", "Tablet", "Pfizer", "Cardiovascular", 120.0),
+        ("Ventolin", "فنتولين", "Salbutamol", "Ventolin", "100mcg", "Inhaler", "GSK", "Respiratory", 35.0),
+        ("Nexium", "نيكسيوم", "Esomeprazole", "Nexium", "40mg", "Capsule", "AstraZeneca", "Gastrointestinal", 65.0),
+        ("Glucophage", "جلوكوفاج", "Metformin", "Glucophage", "500mg", "Tablet", "Merck", "Antidiabetics", 15.0),
+        ("Concor", "كونكور", "Bisoprolol", "Concor", "5mg", "Tablet", "Merck", "Hypertension", 40.0),
+        ("Losartan", "لوسارتان", "Losartan", "Losartan", "50mg", "Tablet", "MSD", "Hypertension", 30.0),
+        ("Omeprazole", "أوميبرازول", "Omeprazole", "Omeprazole", "20mg", "Capsule", "Various", "Gastrointestinal", 45.0),
+        ("Aspirin", "أسبرين", "Acetylsalicylic Acid", "Aspirin", "100mg", "Tablet", "Bayer", "Cardiovascular", 10.0),
+        ("Cetrizine", "سيتريزين", "Cetirizine", "Cetrizine", "10mg", "Syrup", "Various", "Antihistamines", 14.0),
+        ("Metformin XR", "ميتفورمين", "Metformin", "Metformin XR", "1000mg", "Tablet", "Merck", "Antidiabetics", 12.0),
+        ("Amlodipine", "أملوديبين", "Amlodipine", "Amlodipine", "5mg", "Tablet", "Pfizer", "Hypertension", 28.0),
+        ("Azithromycin", "أزيثروميسين", "Azithromycin", "Azithromycin", "500mg", "Tablet", "Pfizer", "Antibiotics", 55.0),
+        ("Ibuprofen Susp", "إيبوبروفين", "Ibuprofen", "Ibuprofen Susp", "100mg/5ml", "Suspension", "Abbott", "Paediatrics", 11.0)
+    ]
 
-        print("Successfully seeded full pharmacy taxonomy and data.")
+    medicines = []
+    for idx, (en, ar, gen, brand, st, form, man, cat_key, price) in enumerate(meds_data):
+        m = Medicine(
+            sku=f"SKU{idx:04d}",
+            barcode=f"123456789{idx:03d}",
+            name_en=en,
+            name_ar=ar,
+            generic_name=gen,
+            brand_name=brand,
+            strength=st,
+            dosage_form=form,
+            manufacturer=man,
+            category_id=level_2_cats[cat_key].id,
+            base_unit="Pack",
+            selling_price=price,
+            reorder_level=10
+        )
+        db.add(m)
+        medicines.append(m)
+    await db.commit()
+
+    now = datetime.utcnow()
+    for idx, m in enumerate(medicines):
+        b1 = MedicineBatch(
+            medicine_id=m.id,
+            batch_number=f"BATCH-A-{idx}",
+            production_date=now - timedelta(days=120),
+            expiry_date=now + timedelta(days=60),
+            purchase_price=float(m.selling_price) * 0.7,
+            quantity_received=50,
+            quantity_remaining=50,
+            supplier_id=suppliers[0].id
+        )
+        b2 = MedicineBatch(
+            medicine_id=m.id,
+            batch_number=f"BATCH-B-{idx}",
+            production_date=now - timedelta(days=185),
+            expiry_date=now + timedelta(days=180),
+            purchase_price=float(m.selling_price) * 0.7,
+            quantity_received=100,
+            quantity_remaining=100,
+            supplier_id=suppliers[1].id
+        )
+        db.add_all([b1, b2])
+    await db.commit()
+    print("Successfully seeded demo medicines and batches.")
 
 if __name__ == "__main__":
     asyncio.run(seed())

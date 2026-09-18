@@ -107,7 +107,7 @@ async def return_sale(db: AsyncSession, sale_id: uuid.UUID, cashier_id: uuid.UUI
         batch_result = await db.execute(select(MedicineBatch).where(MedicineBatch.id == item.batch_id))
         batch = batch_result.scalars().first()
         if batch:
-            batch.quantity_remaining += Decimal(str(item.quantity))
+            batch.quantity_remaining = float(Decimal(str(batch.quantity_remaining)) + Decimal(str(item.quantity)))
             
         # Create return movement
         mv = InventoryMovement(
@@ -115,7 +115,7 @@ async def return_sale(db: AsyncSession, sale_id: uuid.UUID, cashier_id: uuid.UUI
             batch_id=item.batch_id,
             branch_id=sale.branch_id,
             movement_type="RETURN_IN",
-            quantity=Decimal(str(item.quantity)),
+            quantity=float(item.quantity),
             created_by=cashier_id,
             reference_id=str(sale.id),
             reference_type="SALE_RETURN"

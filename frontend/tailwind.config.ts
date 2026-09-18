@@ -72,6 +72,7 @@ const config: Config = {
         background: 'var(--background)',
         foreground: 'var(--foreground)',
         surface: 'var(--surface)',
+        card: 'var(--card)',
         border: 'var(--border)',
       },
       fontFamily: {

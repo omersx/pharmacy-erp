@@ -92,12 +92,13 @@ async def list_movements(
 
 @router.get("/alerts/low-stock")
 async def get_low_stock_alerts(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    effective_reorder = func.coalesce(func.nullif(Medicine.reorder_level, 0), 10)
     query = select(
         Medicine,
         func.coalesce(func.sum(MedicineBatch.quantity_remaining), 0).label("total_quantity")
     ).outerjoin(MedicineBatch, Medicine.id == MedicineBatch.medicine_id)\
      .group_by(Medicine.id)\
-     .having(func.coalesce(func.sum(MedicineBatch.quantity_remaining), 0) <= Medicine.reorder_level)\
+     .having(func.coalesce(func.sum(MedicineBatch.quantity_remaining), 0) <= effective_reorder)\
      .having(func.coalesce(func.sum(MedicineBatch.quantity_remaining), 0) > 0)
     
     result = await db.execute(query)
@@ -105,7 +106,7 @@ async def get_low_stock_alerts(db: AsyncSession = Depends(get_db), current_user:
         {
             "medicine": med,
             "total_quantity": qty or 0,
-            "reorder_level": med.reorder_level
+            "reorder_level": med.reorder_level if med.reorder_level and med.reorder_level > 0 else 10
         }
         for med, qty in result.all()
     ]

@@ -105,7 +105,8 @@ export default function InventoryPage() {
     const totalProducts = stockItems.length;
     const lowStock = stockItems.filter(item => {
       const qty = Number(item.total_quantity);
-      return qty > 0 && qty <= (item.medicine?.reorder_level || 0);
+      const reorder = (item.medicine?.reorder_level && item.medicine.reorder_level > 0) ? item.medicine.reorder_level : 10;
+      return qty > 0 && qty <= reorder;
     }).length;
     const outOfStock = stockItems.filter(item => Number(item.total_quantity) === 0).length;
     const expiringSoon = expiringBatches.length;
@@ -155,7 +156,7 @@ export default function InventoryPage() {
     return stockItems.filter(item => {
       const med = item.medicine;
       const qty = Number(item.total_quantity);
-      const reorder = med?.reorder_level || 0;
+      const reorder = (med?.reorder_level && med.reorder_level > 0) ? med.reorder_level : 10;
 
       const matchSearch = search === '' ||
         med?.name_en?.toLowerCase().includes(search.toLowerCase()) ||
@@ -456,7 +457,7 @@ export default function InventoryPage() {
                 filteredItems.map((item) => {
                   const med = item.medicine;
                   const qty = Number(item.total_quantity);
-                  const reorder = 10;
+                  const reorder = (med?.reorder_level && med.reorder_level > 0) ? med.reorder_level : 10;
                   const status = getStockStatus(qty, reorder);
                   const nearestExpiry = expiryMap[med?.id];
                   const daysLeft = nearestExpiry ? getDaysUntilExpiry(nearestExpiry) : null;
