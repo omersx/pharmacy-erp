@@ -1,4 +1,4 @@
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 
 LABEL org.opencontainers.image.title="Pharmacy ERP Frontend"
 LABEL org.opencontainers.image.description="Next.js frontend for Pharmacy ERP & POS System"
@@ -10,8 +10,8 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm (pin to major version 9 matching pnpm-lock.yaml)
+RUN npm install -g pnpm@9
 
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile
@@ -19,7 +19,7 @@ RUN pnpm install --frozen-lockfile
 # ── Build the source code ──────────────────────────────
 FROM base AS builder
 WORKDIR /app
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 

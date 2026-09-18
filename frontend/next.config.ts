@@ -7,7 +7,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  outputFileTracingRoot: path.resolve(__dirname, '..'),
+  outputFileTracingRoot: path.resolve(__dirname),
   reactStrictMode: true,
   async rewrites() {
     return [

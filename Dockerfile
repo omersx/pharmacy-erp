@@ -1,12 +1,12 @@
 # ==============================================================================
 # Stage 1: Build Frontend (Next.js)
 # ==============================================================================
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 # Install dependencies
 RUN apk add --no-cache libc6-compat
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9
 COPY frontend/package.json frontend/pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile
 
@@ -27,9 +27,11 @@ LABEL org.opencontainers.image.source="https://github.com/omersx/pharmacy-erp"
 # Install system dependencies, Node.js, Nginx, and Supervisord
 RUN apt-get update && apt-get install -y \
     curl \
+    gnupg \
+    ca-certificates \
     supervisor \
     nginx \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
