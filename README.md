@@ -207,9 +207,9 @@ pnpm dev
 
 ### Default Login
 
-| Role | Email | Password |
-|------|-------|----------|
-| Super Admin | `admin@pharmacy.com` | `admin123` |
+| Role | Username / Email | Password |
+|------|------------------|----------|
+| Super Admin | `admin` or `admin@pharmacy.com` | `admin` or `admin123` |
 
 > ⚠️ **Change the default credentials** before deploying to production!
 

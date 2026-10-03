@@ -31,6 +31,10 @@ That's it! The application will start at:
 - **Backend API:** http://localhost:8000
 - **API Docs:** http://localhost:8000/docs
 
+### 🔑 Default Login
+- **Username / Email:** `admin` (or `admin@pharmacy.com`)
+- **Password:** `admin` (or `admin123`)
+
 ---
 
 ## 🛠️ CLI Commands
