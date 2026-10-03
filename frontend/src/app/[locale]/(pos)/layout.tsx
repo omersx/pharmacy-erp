@@ -3,6 +3,7 @@
 import '@/app/print.css';
 import { useEffect } from 'react';
 import { useAppStore } from '@/store/app-store';
+import { AuthGuard } from '@/components/auth-guard';
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useAppStore();
@@ -24,10 +25,13 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
   }, [theme]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-surface">
-      <main className="flex-1 overflow-hidden">
-        {children}
-      </main>
-    </div>
+    <AuthGuard>
+      <div className="flex flex-col h-screen overflow-hidden bg-surface">
+        <main className="flex-1 overflow-hidden">
+          {children}
+        </main>
+      </div>
+    </AuthGuard>
   );
 }
+
