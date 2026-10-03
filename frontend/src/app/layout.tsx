@@ -6,6 +6,9 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 export const metadata = {
   title: 'Pharma ERP',
   description: 'Modern Pharmacy Management System',
+  icons: {
+    icon: '/logo.png',
+  },
 };
 
 export default function RootLayout({
