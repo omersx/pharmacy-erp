@@ -16,8 +16,9 @@ if not exist ".env" (
     echo  [1/4] .env file already exists, skipping...
 )
 
-REM ── Step 2: Frontend Dependencies ─────────────────────
-echo  [2/4] Installing frontend dependencies...
+REM ── Step 2: Dependencies ──────────────────────────
+echo  [2/4] Installing dependencies...
+call pnpm install --no-frozen-lockfile 2>nul
 cd frontend
 call pnpm install --force --no-frozen-lockfile 2>nul
 if errorlevel 1 (

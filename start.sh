@@ -15,7 +15,8 @@ else
 fi
 
 # ── Step 2: Frontend Dependencies ─────────────────────
-echo "[2/4] Installing frontend dependencies..."
+echo "[2/4] Installing dependencies..."
+pnpm install --no-frozen-lockfile
 cd frontend
 pnpm install --force --no-frozen-lockfile
 cd ..
