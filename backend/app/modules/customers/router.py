@@ -21,6 +21,7 @@ router = APIRouter(tags=["customers"])
 # CUSTOMER CRUD
 # ══════════════════════════════════════════════════════════════════════════
 
+@router.get("", response_model=List[CustomerResponse], include_in_schema=False)
 @router.get("/", response_model=List[CustomerResponse])
 async def list_customers(
     db: AsyncSession = Depends(get_db),
@@ -59,6 +60,7 @@ async def get_customer(
     return customer
 
 
+@router.post("", response_model=CustomerResponse, include_in_schema=False)
 @router.post("/", response_model=CustomerResponse)
 async def create_customer(
     data: CustomerCreate,

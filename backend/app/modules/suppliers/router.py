@@ -12,6 +12,7 @@ from app.modules.suppliers.schemas import SupplierCreate, SupplierUpdate, Suppli
 
 router = APIRouter(tags=["suppliers"])
 
+@router.get("", response_model=List[SupplierResponse], include_in_schema=False)
 @router.get("/", response_model=List[SupplierResponse])
 async def list_suppliers(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(select(Supplier))
@@ -24,6 +25,7 @@ async def get_supplier(id: UUID, db: AsyncSession = Depends(get_db), current_use
         raise HTTPException(status_code=404, detail="Supplier not found")
     return supplier
 
+@router.post("", response_model=SupplierResponse, include_in_schema=False)
 @router.post("/", response_model=SupplierResponse)
 async def create_supplier(data: SupplierCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     supplier = Supplier(**data.model_dump())

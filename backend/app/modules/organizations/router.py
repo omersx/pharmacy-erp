@@ -12,7 +12,8 @@ from app.modules.organizations.schemas import BranchCreate, BranchUpdate, Branch
 
 router = APIRouter()
 
-@router.post("/", response_model=BranchResponse)
+@router.post("", response_model=BranchResponse)
+@router.post("/", response_model=BranchResponse, include_in_schema=False)
 async def create_branch(branch: BranchCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_branch = Branch(**branch.model_dump())
     db.add(db_branch)
@@ -20,7 +21,8 @@ async def create_branch(branch: BranchCreate, db: AsyncSession = Depends(get_db)
     await db.refresh(db_branch)
     return db_branch
 
-@router.get("/", response_model=List[BranchResponse])
+@router.get("", response_model=List[BranchResponse])
+@router.get("/", response_model=List[BranchResponse], include_in_schema=False)
 async def list_branches(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(select(Branch))
     return result.scalars().all()

@@ -31,7 +31,7 @@ from app.modules.roles.router import router as roles_router
 from app.modules.admin.router import router as admin_router
 from app.modules.notifications.router import router as notifications_router
 
-app = FastAPI(title=settings.APP_NAME)
+app = FastAPI(title=settings.APP_NAME, redirect_slashes=False)
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_exception_handler(AppException, app_exception_handler)
 

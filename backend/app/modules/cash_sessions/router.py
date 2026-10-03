@@ -71,6 +71,7 @@ async def get_active_session(db: AsyncSession = Depends(get_db), current_user: U
         raise HTTPException(status_code=404, detail="No active session found")
     return session
 
+@router.get("", response_model=List[CashSessionResponse], include_in_schema=False)
 @router.get("/", response_model=List[CashSessionResponse])
 async def list_sessions(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = select(CashSession).order_by(CashSession.opened_at.desc())

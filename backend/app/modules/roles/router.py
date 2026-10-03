@@ -31,6 +31,7 @@ async def list_permissions_by_module(db: AsyncSession = Depends(get_db), current
         for module, permissions in grouped.items()
     ]
 
+@router.get("", response_model=List[RoleResponse], include_in_schema=False)
 @router.get("/", response_model=List[RoleResponse])
 async def list_roles(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(select(Role).order_by(Role.sort_order))
@@ -43,6 +44,7 @@ async def get_role(role_id: UUID, db: AsyncSession = Depends(get_db), current_us
         raise HTTPException(status_code=404, detail="Role not found")
     return role
 
+@router.post("", response_model=RoleResponse, include_in_schema=False)
 @router.post("/", response_model=RoleResponse)
 async def create_role(data: RoleCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     existing = await db.execute(select(Role).where(Role.name == data.name))

@@ -26,6 +26,7 @@ from app.modules.medicines.template_generator import generate_csv_template, gene
 
 router = APIRouter(tags=["Medicines"])
 
+@router.get("", response_model=List[MedicineResponse], include_in_schema=False)
 @router.get("/", response_model=List[MedicineResponse])
 async def list_medicines(db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(Medicine).where(Medicine.is_active == True))
@@ -45,6 +46,7 @@ async def search_medicines(q: str, db: AsyncSession = Depends(get_db)):
     res = await db.execute(query)
     return res.scalars().all()
 
+@router.post("", response_model=MedicineResponse, include_in_schema=False)
 @router.post("/", response_model=MedicineResponse)
 async def create_medicine(data: MedicineCreate, request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     medicine = Medicine(**data.model_dump())

@@ -30,6 +30,7 @@ class UserResponse(BaseModel):
 
 router = APIRouter(tags=["users"])
 
+@router.get("", response_model=List[UserResponse], include_in_schema=False)
 @router.get("/", response_model=List[UserResponse])
 async def list_users(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":

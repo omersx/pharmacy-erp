@@ -12,6 +12,7 @@ from app.modules.notifications.schemas import NotificationResponse, UnreadCountR
 
 router = APIRouter(tags=["Notifications"])
 
+@router.get("", response_model=List[NotificationResponse], include_in_schema=False)
 @router.get("/", response_model=List[NotificationResponse])
 async def get_notifications(
     db: AsyncSession = Depends(get_db),
