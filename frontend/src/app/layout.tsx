@@ -7,7 +7,7 @@ export const metadata = {
   title: 'Pharma ERP',
   description: 'Modern Pharmacy Management System',
   icons: {
-    icon: '/logo.png',
+    icon: { url: '/favicon.ico', type: 'image/png', sizes: '32x32' },
   },
 };
 
