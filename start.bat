@@ -75,7 +75,7 @@ if not exist "backend\data\pharmacy.db" (
     cd ..
     echo.
     echo  ====================================================
-    echo   Demo login:  admin@pharmacy.com  /  admin123
+    echo   Demo login:  admin  /  admin123  (or admin)
     echo  ====================================================
 ) else (
     echo  [4/4] Database already exists, skipping seed...

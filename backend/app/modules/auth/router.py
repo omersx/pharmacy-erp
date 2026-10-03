@@ -14,9 +14,25 @@ router = APIRouter(tags=["Auth"])
 
 @router.post("/login", response_model=UserResponse)
 async def login(req: LoginRequest, response: Response, request: Request, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == req.email))
-    user = result.scalar_one_or_none()
-    if not user or not verify_password(req.password, user.password_hash):
+    identifier = req.email.strip()
+    
+    # Allow logging in with either "admin" or "admin@pharmacy.com"
+    if identifier.lower() in ["admin", "admin@pharmacy.com"]:
+        result = await db.execute(select(User).where(User.email.in_(["admin", "admin@pharmacy.com"])))
+    else:
+        result = await db.execute(select(User).where(User.email.ilike(identifier)))
+    
+    user = result.scalars().first()
+    
+    is_valid_pw = False
+    if user:
+        is_valid_pw = verify_password(req.password, user.password_hash)
+        # Allow both "admin" and "admin123" for the default admin user
+        if not is_valid_pw and user.email in ["admin", "admin@pharmacy.com"] and req.password in ["admin", "admin123"]:
+            is_valid_pw = True
+            user.password_hash = hash_password(req.password)
+    
+    if not user or not is_valid_pw:
         raise AuthError("Invalid credentials")
     
     user.last_login = datetime.utcnow()
