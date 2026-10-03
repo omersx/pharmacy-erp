@@ -155,7 +155,7 @@ export default function SalesHistoryPage() {
                     <tr 
                       key={sale.id} 
                       onClick={() => openSaleDetails(sale)}
-                      className="hover:bg-gray-800/30 cursor-pointer transition-colors group"
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors group"
                     >
                       <td className="px-6 py-4 font-medium text-foreground flex items-center gap-2">
                         <Receipt className="h-4 w-4 text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -210,7 +210,7 @@ export default function SalesHistoryPage() {
                     </Dialog.Description>
                   </div>
                   <Dialog.Close asChild>
-                    <button className="h-8 w-8 rounded-full bg-gray-800 flex items-center justify-center text-muted-foreground hover:text-white hover:bg-gray-700 transition-colors">
+                    <button className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors">
                       <X size={18} />
                     </button>
                   </Dialog.Close>
@@ -281,7 +281,7 @@ export default function SalesHistoryPage() {
                       )}
                     </button>
                   ) : (
-                    <div className="w-full flex items-center justify-center gap-2 bg-gray-800 text-muted-foreground font-medium py-3 rounded-xl">
+                    <div className="w-full flex items-center justify-center gap-2 bg-gray-200 dark:bg-gray-800 text-muted-foreground font-medium py-3 rounded-xl">
                       <AlertCircle className="h-5 w-5" /> Already Refunded
                     </div>
                   )}

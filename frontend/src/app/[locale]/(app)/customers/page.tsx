@@ -210,8 +210,8 @@ export default function CustomersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Customers</h1>
-          <p className="text-sm text-gray-400 mt-1">Manage your customer database and credit accounts</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Customers</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your customer database and credit accounts</p>
         </div>
         <Button variant="primary" onClick={handleOpenAdd} className="gap-2 w-full sm:w-auto">
           <Plus className="h-4 w-4" />
@@ -244,13 +244,13 @@ export default function CustomersPage() {
       </div>
 
       {/* Filters & Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-[#0B1220] p-4 rounded-xl border border-gray-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm">
         <div className="flex flex-col sm:flex-row flex-1 w-full gap-4 items-center">
           <div className="w-full sm:max-w-sm relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
             <Input
               placeholder="Search customers..."
-              className="pl-10 bg-gray-900/50 w-full"
+              className="pl-10 bg-surface w-full"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -271,10 +271,10 @@ export default function CustomersPage() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 bg-[#0B1220] border border-gray-800 rounded-xl overflow-hidden shadow-sm flex flex-col">
+      <div className="flex-1 bg-card border border-border rounded-xl overflow-hidden shadow-sm flex flex-col">
         <div className="overflow-x-auto flex-1">
           <table className="w-full text-sm text-left">
-            <thead className="text-xs text-gray-400 bg-gray-900/50 uppercase border-b border-gray-800 sticky top-0 z-10">
+            <thead className="text-xs text-gray-500 dark:text-gray-400 bg-surface uppercase border-b border-border sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-4 font-medium">Customer</th>
                 <th className="px-6 py-4 font-medium hidden md:table-cell">Contact</th>
@@ -284,7 +284,7 @@ export default function CustomersPage() {
                 <th className="px-6 py-4 font-medium text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800">
+            <tbody className="divide-y divide-border">
               {isLoading ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
@@ -304,30 +304,30 @@ export default function CustomersPage() {
                 filteredCustomers.map((customer) => {
                   const isActive = customer.status === 'ACTIVE' || customer.is_active !== false;
                   return (
-                    <tr key={customer.id} className="hover:bg-gray-800/30 transition-colors group">
+                    <tr key={customer.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="font-medium text-white">{customer.name}</span>
+                          <span className="font-medium text-foreground">{customer.name}</span>
                           {customer.arabic_name && (
-                            <span className="text-xs text-gray-400 mt-0.5">{customer.arabic_name}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{customer.arabic_name}</span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 hidden md:table-cell">
                         <div className="flex flex-col">
-                          <span className="text-gray-300">{customer.phone || '-'}</span>
+                          <span className="text-gray-700 dark:text-gray-300">{customer.phone || '-'}</span>
                           {customer.email && (
                             <span className="text-xs text-gray-500">{customer.email}</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-300 hidden lg:table-cell">
+                      <td className="px-6 py-4 text-right text-gray-700 dark:text-gray-300 hidden lg:table-cell">
                         {customer.total_purchases !== undefined ? formatCurrency(customer.total_purchases) : formatCurrency(0)}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn(
                           "font-medium",
-                          (customer.balance || 0) > 0 ? "text-danger" : "text-gray-300"
+                          (customer.balance || 0) > 0 ? "text-danger" : "text-gray-700 dark:text-gray-300"
                         )}>
                           {formatCurrency(customer.balance || 0)}
                         </span>
@@ -345,47 +345,47 @@ export default function CustomersPage() {
                             </Button>
                           </DropdownMenu.Trigger>
                           <DropdownMenu.Portal>
-                            <DropdownMenu.Content align="end" className="z-50 min-w-[160px] overflow-hidden rounded-lg border border-gray-800 bg-[#0B1220] p-1 shadow-xl animate-in data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2">
+                            <DropdownMenu.Content align="end" className="z-50 min-w-[160px] overflow-hidden rounded-lg border border-border bg-card p-1 shadow-xl animate-in data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2">
                               <DropdownMenu.Item asChild>
                                 <Link 
                                   href={`/${locale}/customers/${customer.id}`}
-                                  className="flex items-center gap-2 px-2 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-md cursor-pointer outline-none transition-colors"
+                                  className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
                                 >
                                   <Eye className="h-4 w-4" /> View Profile
                                 </Link>
                               </DropdownMenu.Item>
                               <DropdownMenu.Item 
                                 onClick={() => handleOpenEdit(customer)}
-                                className="flex items-center gap-2 px-2 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-md cursor-pointer outline-none transition-colors"
+                                className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
                               >
                                 <Edit className="h-4 w-4" /> Edit Details
                               </DropdownMenu.Item>
                               <DropdownMenu.Item asChild>
                                 <Link 
                                   href={`/${locale}/sales?customerId=${customer.id}`}
-                                  className="flex items-center gap-2 px-2 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-md cursor-pointer outline-none transition-colors"
+                                  className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
                                 >
                                   <Activity className="h-4 w-4" /> New Sale
                                 </Link>
                               </DropdownMenu.Item>
                               <DropdownMenu.Item 
                                 onClick={handleAddPayment}
-                                className="flex items-center gap-2 px-2 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white rounded-md cursor-pointer outline-none transition-colors"
+                                className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
                               >
                                 <CreditCard className="h-4 w-4" /> Add Payment
                               </DropdownMenu.Item>
-                              <DropdownMenu.Separator className="h-px bg-gray-800 my-1" />
+                              <DropdownMenu.Separator className="h-px bg-border my-1" />
                               {isActive ? (
                                 <DropdownMenu.Item 
                                   onClick={() => handleStatusChange(customer.id, 'INACTIVE')}
-                                  className="flex items-center gap-2 px-2 py-2 text-sm text-amber-400 hover:bg-gray-800 hover:text-amber-300 rounded-md cursor-pointer outline-none transition-colors"
+                                  className="flex items-center gap-2 px-2 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md cursor-pointer outline-none transition-colors"
                                 >
                                   <Ban className="h-4 w-4" /> Deactivate
                                 </DropdownMenu.Item>
                               ) : (
                                 <DropdownMenu.Item 
                                   onClick={() => handleStatusChange(customer.id, 'ACTIVE')}
-                                  className="flex items-center gap-2 px-2 py-2 text-sm text-success hover:bg-gray-800 rounded-md cursor-pointer outline-none transition-colors"
+                                  className="flex items-center gap-2 px-2 py-2 text-sm text-success hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md cursor-pointer outline-none transition-colors"
                                 >
                                   <Activity className="h-4 w-4" /> Activate
                                 </DropdownMenu.Item>
@@ -395,7 +395,7 @@ export default function CustomersPage() {
                                   setCustomerToDelete(customer.id);
                                   setIsDeleteDialogOpen(true);
                                 }}
-                                className="flex items-center gap-2 px-2 py-2 text-sm text-danger hover:bg-red-950/50 hover:text-red-400 rounded-md cursor-pointer outline-none transition-colors"
+                                className="flex items-center gap-2 px-2 py-2 text-sm text-danger hover:bg-red-50 dark:hover:bg-red-950/50 hover:text-red-600 dark:hover:text-red-400 rounded-md cursor-pointer outline-none transition-colors"
                               >
                                 <Trash2 className="h-4 w-4" /> Delete
                               </DropdownMenu.Item>
@@ -420,7 +420,7 @@ export default function CustomersPage() {
       >
         <div className="space-y-5">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-300">Full Name <span className="text-danger">*</span></label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Full Name <span className="text-danger">*</span></label>
             <Input 
               placeholder="e.g. Ahmed Ali" 
               value={formData.name}
@@ -428,7 +428,7 @@ export default function CustomersPage() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-300">Arabic Name</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Arabic Name</label>
             <Input 
               placeholder="أحمد علي" 
               dir="auto"
@@ -438,7 +438,7 @@ export default function CustomersPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Phone</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
               <Input 
                 placeholder="+252 XXXXXXX" 
                 value={formData.phone}
@@ -446,7 +446,7 @@ export default function CustomersPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Email</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
               <Input 
                 type="email"
                 placeholder="email@example.com" 
@@ -456,7 +456,7 @@ export default function CustomersPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-300">Address</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Address</label>
             <Input 
               placeholder="Street, District, City" 
               value={formData.address}
@@ -465,7 +465,7 @@ export default function CustomersPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Credit Limit ({currency})</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Credit Limit ({currency})</label>
               <Input 
                 type="number"
                 min="0"
@@ -475,7 +475,7 @@ export default function CustomersPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Opening Balance ({currency})</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Opening Balance ({currency})</label>
               <Input 
                 type="number"
                 min="0"
@@ -488,7 +488,7 @@ export default function CustomersPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-300">Notes</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
             <textarea
               className="flex min-h-[100px] w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="Any additional information..."
@@ -498,10 +498,10 @@ export default function CustomersPage() {
           </div>
           
           <div className="pt-2">
-            <div className="flex items-center justify-between border border-gray-800 p-4 rounded-lg bg-gray-900/30">
+            <div className="flex items-center justify-between border border-border p-4 rounded-lg bg-surface">
               <div className="space-y-0.5">
-                <label className="text-sm font-medium text-white">Active Status</label>
-                <p className="text-xs text-gray-400">Can this customer make new purchases?</p>
+                <label className="text-sm font-medium text-foreground">Active Status</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Can this customer make new purchases?</p>
               </div>
               <Switch 
                 checked={formData.is_active}
@@ -510,7 +510,7 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          <div className="pt-6 flex justify-end gap-3 border-t border-gray-800 mt-6">
+          <div className="pt-6 flex justify-end gap-3 border-t border-border mt-6">
             <Button variant="secondary" onClick={() => setIsSlideOverOpen(false)}>
               Cancel
             </Button>
