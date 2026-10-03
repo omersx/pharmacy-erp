@@ -35,8 +35,8 @@
   "scripts": {
     "setup": "pnpm run setup:frontend && pnpm run setup:backend",
     "setup:frontend": "cd frontend && pnpm install --force --no-frozen-lockfile",
-    "setup:backend:win": "cd backend && python -m venv venv && .\\venv\\Scripts\\pip install -r requirements.txt",
-    "setup:backend:unix": "cd backend && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt",
+    "setup:backend:win": "cd backend && python -m venv venv && .\\venv\\Scripts\\python -m pip install -r requirements.txt",
+    "setup:backend:unix": "cd backend && python3 -m venv venv && ./venv/bin/python3 -m pip install -r requirements.txt",
     "setup:backend": "node -e \"process.platform==='win32'?require('child_process').execSync('pnpm run setup:backend:win',{stdio:'inherit'}):require('child_process').execSync('pnpm run setup:backend:unix',{stdio:'inherit'})\"",
     "dev": "concurrently -n API,WEB -c blue,green \"pnpm run dev:api\" \"pnpm run dev:web\"",
     "dev:api:win": "cd backend && .\\venv\\Scripts\\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",

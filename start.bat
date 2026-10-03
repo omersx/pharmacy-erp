@@ -34,6 +34,14 @@ REM ── Step 3: Backend Setup ───────────────�
 echo  [3/4] Setting up Python backend...
 cd backend
 
+if exist "venv" (
+    call .\venv\Scripts\python.exe -c "import sys" >nul 2>&1
+    if errorlevel 1 (
+        echo        Virtual environment path is invalid or directory was moved. Recreating...
+        rmdir /s /q venv
+    )
+)
+
 if not exist "venv" (
     echo        Creating virtual environment...
     python -m venv venv
@@ -48,7 +56,7 @@ if not exist "venv" (
 )
 
 echo        Installing Python dependencies...
-call .\venv\Scripts\pip install -q -r requirements.txt
+call .\venv\Scripts\python.exe -m pip install -q -r requirements.txt
 if errorlevel 1 (
     echo.
     echo  ERROR: Python dependency install failed.
