@@ -17,7 +17,7 @@ from app.modules.suppliers.models import Supplier
 from app.modules.inventory.models import InventoryMovement
 from app.modules.sales.models import Sale, SaleItem, HeldSale
 from app.modules.customers.models import Customer, CustomerPayment
-from app.modules.cash_sessions.models import CashSession
+from app.modules.cash_sessions.models import CashSession, CashMovement
 from app.modules.roles.models import Role, Permission
 from app.modules.admin.models import AuditLog
 from app.modules.notifications.models import Notification

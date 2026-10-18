@@ -92,6 +92,17 @@ async def create_sale(db: AsyncSession, sale_data, branch_id: uuid.UUID, cashier
 
     invoice_number = f"INV-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
 
+    # Auto-link active cash session for cashier if not provided
+    session_id = sale_data.cash_session_id
+    if not session_id:
+        from app.modules.cash_sessions.models import CashSession
+        sess_query = select(CashSession.id).where(
+            CashSession.cashier_id == cashier_id,
+            CashSession.status == "OPEN"
+        ).order_by(CashSession.opened_at.desc()).limit(1)
+        sess_res = await db.execute(sess_query)
+        session_id = sess_res.scalar_one_or_none()
+
     sale = Sale(
         invoice_number=invoice_number,
         branch_id=branch_id,
@@ -104,7 +115,7 @@ async def create_sale(db: AsyncSession, sale_data, branch_id: uuid.UUID, cashier
         total_amount=float(total_amount),
         payment_method=sale_data.payment_method,
         customer_id=sale_data.customer_id,
-        cash_session_id=sale_data.cash_session_id
+        cash_session_id=session_id
     )
     db.add(sale)
     await db.flush()
