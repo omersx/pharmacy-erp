@@ -11,6 +11,7 @@ import PaymentModal from '@/components/pos/PaymentModal';
 import PaymentSettingsModal from '@/components/pos/PaymentSettingsModal';
 import { CashSessionGuard } from '@/components/pos/CashSessionGuard';
 import { CloseSessionModal } from '@/components/pos/CloseSessionModal';
+import { CashMovementModal } from '@/components/pos/CashMovementModal';
 import { SaleReceipt } from '@/components/pos/SaleReceipt';
 import { BarcodeScanner } from '@/components/ui/barcode-scanner';
 import { useScanFeedback } from '@/components/ui/scan-feedback';
@@ -29,6 +30,7 @@ import {
   Moon,
   LogOut,
   Calculator,
+  ArrowDownCircle,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/routing';
 import toast from 'react-hot-toast';
@@ -47,6 +49,7 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [closeSessionOpen, setCloseSessionOpen] = useState(false);
+  const [cashMovementOpen, setCashMovementOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<'cart' | 'products'>('products');
   
@@ -292,9 +295,19 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
             Exit POS <span className="text-foreground/40 font-serif">→</span>
           </button>
           {session?.id && (
-            <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium rounded-full">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Register Open</span>
+            <div className="hidden lg:flex items-center gap-2">
+              <div className="flex items-center gap-2 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium rounded-full">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Register Open</span>
+              </div>
+              <button
+                onClick={() => setCashMovementOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-surface border border-border hover:bg-background text-foreground/80 hover:text-foreground text-xs font-medium rounded-full transition-colors"
+                title="Deposit float or record petty cash expense"
+              >
+                <ArrowDownCircle size={13} className="text-emerald-500" />
+                <span>Cash In/Out</span>
+              </button>
             </div>
           )}
         </div>
@@ -390,6 +403,16 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
                     <div className="px-3 py-2 border-b border-border text-xs text-foreground/50">
                       Opening Float: <span className="font-semibold text-foreground">{formatMoney(session.opening_amount, currency)}</span>
                     </div>
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setCashMovementOpen(true);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-background flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium transition-colors"
+                    >
+                      <ArrowDownCircle size={16} />
+                      Cash In / Out
+                    </button>
                     <button
                       onClick={() => {
                         setUserMenuOpen(false);
@@ -489,6 +512,15 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
         onScan={handleCameraScan}
         title="Scan Product Barcode"
       />
+
+      {/* ===== CASH IN / OUT MODAL ===== */}
+      {session?.id && (
+        <CashMovementModal
+          open={cashMovementOpen}
+          onClose={() => setCashMovementOpen(false)}
+          sessionId={session.id}
+        />
+      )}
 
       {/* ===== CLOSE REGISTER MODAL ===== */}
       <CloseSessionModal

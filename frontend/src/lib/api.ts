@@ -146,7 +146,16 @@ export const api = {
   openSession: (data: any) => fetchApi('/cash-sessions/open', { method: 'POST', body: JSON.stringify(data) }),
   closeSession: (id: string, data: any) => fetchApi(`/cash-sessions/${id}/close`, { method: 'POST', body: JSON.stringify(data) }),
   getActiveSession: () => fetchApi('/cash-sessions/active'),
-  getSessions: () => fetchApi('/cash-sessions'),
+  getSessions: (params?: { status?: string; branch_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.append('status', params.status);
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    const qs = q.toString();
+    return fetchApi(`/cash-sessions${qs ? `?${qs}` : ''}`);
+  },
+  getSessionSummary: (id: string) => fetchApi(`/cash-sessions/${id}/summary`),
+  addCashMovement: (id: string, data: { movement_type: 'CASH_IN' | 'CASH_OUT'; amount: number; reason: string }) =>
+    fetchApi(`/cash-sessions/${id}/movements`, { method: 'POST', body: JSON.stringify(data) }),
   
   // Reports
   getDailySales: (date: string) => fetchApi(`/reports/sales/daily?date=${date}`),

@@ -92,11 +92,7 @@ export function CashSessionGuard({ children }: CashSessionGuardProps) {
   const handleOpenRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const branchId = selectedBranchId || (branches.length > 0 ? branches[0].id : '');
-    if (!branchId) {
-      toast.error('Please select a branch');
-      return;
-    }
+    const branchId = selectedBranchId || (branches.length > 0 ? branches[0].id : undefined);
 
     setIsOpening(true);
     try {
@@ -108,7 +104,7 @@ export function CashSessionGuard({ children }: CashSessionGuardProps) {
       const newSession: any = await api.openSession({
         opening_amount: amount,
         terminal_name: terminalName.trim() || 'POS Terminal 1',
-        branch_id: branchId,
+        branch_id: branchId || undefined,
       });
 
       toast.success('Cash register opened successfully');
@@ -185,28 +181,25 @@ export function CashSessionGuard({ children }: CashSessionGuardProps) {
         </div>
 
         <form onSubmit={handleOpenRegister} className="p-6 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-foreground/60 block">Branch</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Store className="h-4 w-4 text-foreground/40" />
-              </div>
-              <select
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                required
-                className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-xl text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-pos-500"
-              >
-                {branches.length === 0 ? (
-                  <option value="" disabled>Loading branches...</option>
-                ) : (
-                  branches.map(b => (
+          {branches.length > 1 && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-foreground/60 block">Branch</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Store className="h-4 w-4 text-foreground/40" />
+                </div>
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-xl text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-pos-500"
+                >
+                  {branches.map(b => (
                     <option key={b.id} value={b.id}>{b.name}</option>
-                  ))
-                )}
-              </select>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-foreground/60 block">Terminal Name</label>
