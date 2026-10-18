@@ -9,8 +9,24 @@ class SaleItemCreate(BaseModel):
     quantity: Decimal
     unit_price: Decimal
 
-class SaleCreate(BaseModel):
+class PaymentEntryCreate(BaseModel):
     payment_method: str
+    amount: Decimal
+    reference: Optional[str] = None
+
+class PaymentEntryResponse(BaseModel):
+    id: uuid.UUID
+    sale_id: uuid.UUID
+    cash_session_id: Optional[uuid.UUID] = None
+    payment_method: str
+    amount: Decimal
+    reference: Optional[str] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+class SaleCreate(BaseModel):
+    payment_method: Optional[str] = "CASH"
+    payments: Optional[List[PaymentEntryCreate]] = None
     items: List[SaleItemCreate]
     customer_id: Optional[uuid.UUID] = None
     cash_session_id: Optional[uuid.UUID] = None
@@ -90,4 +106,5 @@ class SaleResponse(BaseModel):
     customer: Optional[CustomerSimple] = None
     items: List[SaleItemResponse] = []
     returns: List[SaleReturnResponse] = []
+    payments: List[PaymentEntryResponse] = []
     model_config = {"from_attributes": True}

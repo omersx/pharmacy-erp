@@ -18,7 +18,8 @@ export interface CompletedSale {
   total: number;
   paymentMethodId: string;
   paymentMethodName: string;
-  paymentType: 'cash' | 'mobile';
+  paymentType: 'cash' | 'mobile' | 'split';
+  payments?: { methodId: string; methodName: string; amount: number; reference?: string }[];
   customerName: string | null;
   timestamp: string; // ISO string
 }
@@ -115,17 +116,34 @@ export const usePaymentMethodsStore = create<PaymentMethodsState>()(
         const byMethod: Record<string, { name: string; total: number; count: number }> = {};
 
         for (const sale of completedSales) {
-          if (sale.paymentType === 'cash') {
-            cash += sale.total;
-          } else {
-            mobile += sale.total;
-          }
+          if (sale.payments && sale.payments.length > 0) {
+            for (const p of sale.payments) {
+              const isCash = p.methodId.toLowerCase() === 'cash';
+              if (isCash) {
+                cash += p.amount;
+              } else {
+                mobile += p.amount;
+              }
 
-          if (!byMethod[sale.paymentMethodId]) {
-            byMethod[sale.paymentMethodId] = { name: sale.paymentMethodName, total: 0, count: 0 };
+              if (!byMethod[p.methodId]) {
+                byMethod[p.methodId] = { name: p.methodName, total: 0, count: 0 };
+              }
+              byMethod[p.methodId].total += p.amount;
+              byMethod[p.methodId].count += 1;
+            }
+          } else {
+            if (sale.paymentType === 'cash') {
+              cash += sale.total;
+            } else {
+              mobile += sale.total;
+            }
+
+            if (!byMethod[sale.paymentMethodId]) {
+              byMethod[sale.paymentMethodId] = { name: sale.paymentMethodName, total: 0, count: 0 };
+            }
+            byMethod[sale.paymentMethodId].total += sale.total;
+            byMethod[sale.paymentMethodId].count += 1;
           }
-          byMethod[sale.paymentMethodId].total += sale.total;
-          byMethod[sale.paymentMethodId].count += 1;
         }
 
         return {

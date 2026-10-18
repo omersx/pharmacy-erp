@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.modules.auth.models import User
 from app.modules.organizations.models import Branch
-from app.modules.sales.models import Sale, SaleReturn
+from app.modules.sales.models import Sale, SaleReturn, SalePayment
 from app.modules.cash_sessions.models import CashSession, CashMovement
 from app.modules.cash_sessions.schemas import (
     CashSessionOpen,
@@ -24,36 +24,66 @@ from app.modules.cash_sessions.schemas import (
 router = APIRouter(tags=["cash-sessions"])
 
 async def calculate_session_totals(db: AsyncSession, session: CashSession):
-    """Calculates all live financial aggregates for a cash session."""
+    """Calculates all live financial aggregates for a cash session with split-payment accuracy."""
     # 1. Cash Sales (Gross Cash collected during shift)
-    cash_res = await db.execute(
+    sp_cash = await db.execute(
+        select(func.coalesce(func.sum(SalePayment.amount), 0))
+        .join(Sale, Sale.id == SalePayment.sale_id)
+        .where(
+            Sale.cash_session_id == session.id,
+            SalePayment.payment_method == "CASH",
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"])
+        )
+    )
+    legacy_cash = await db.execute(
         select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
             Sale.cash_session_id == session.id,
             Sale.payment_method == "CASH",
-            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"])
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"]),
+            ~Sale.id.in_(select(SalePayment.sale_id))
         )
     )
-    total_cash_sales = Decimal(str(cash_res.scalar() or 0))
+    total_cash_sales = Decimal(str(sp_cash.scalar() or 0)) + Decimal(str(legacy_cash.scalar() or 0))
 
     # 2. Card / Bank Sales
-    card_res = await db.execute(
-        select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
+    sp_card = await db.execute(
+        select(func.coalesce(func.sum(SalePayment.amount), 0))
+        .join(Sale, Sale.id == SalePayment.sale_id)
+        .where(
             Sale.cash_session_id == session.id,
-            Sale.payment_method.in_(["CARD", "BANK"]),
+            SalePayment.payment_method.in_(["CARD", "BANK", "BANK_TRANSFER"]),
             Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"])
         )
     )
-    total_card_sales = Decimal(str(card_res.scalar() or 0))
+    legacy_card = await db.execute(
+        select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
+            Sale.cash_session_id == session.id,
+            Sale.payment_method.in_(["CARD", "BANK", "BANK_TRANSFER"]),
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"]),
+            ~Sale.id.in_(select(SalePayment.sale_id))
+        )
+    )
+    total_card_sales = Decimal(str(sp_card.scalar() or 0)) + Decimal(str(legacy_card.scalar() or 0))
 
-    # 3. Other Sales
-    other_res = await db.execute(
-        select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
+    # 3. Other / Mobile Sales
+    sp_other = await db.execute(
+        select(func.coalesce(func.sum(SalePayment.amount), 0))
+        .join(Sale, Sale.id == SalePayment.sale_id)
+        .where(
             Sale.cash_session_id == session.id,
-            ~Sale.payment_method.in_(["CASH", "CARD", "BANK"]),
+            ~SalePayment.payment_method.in_(["CASH", "CARD", "BANK", "BANK_TRANSFER"]),
             Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"])
         )
     )
-    total_other_sales = Decimal(str(other_res.scalar() or 0))
+    legacy_other = await db.execute(
+        select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
+            Sale.cash_session_id == session.id,
+            ~Sale.payment_method.in_(["CASH", "CARD", "BANK", "BANK_TRANSFER", "SPLIT"]),
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"]),
+            ~Sale.id.in_(select(SalePayment.sale_id))
+        )
+    )
+    total_other_sales = Decimal(str(sp_other.scalar() or 0)) + Decimal(str(legacy_other.scalar() or 0))
 
     # 4. Total Sales Count
     count_res = await db.execute(

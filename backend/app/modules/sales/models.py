@@ -23,6 +23,17 @@ class Sale(Base):
     items = relationship("SaleItem", back_populates="sale", lazy="selectin")
     customer = relationship("Customer", lazy="selectin")
     returns = relationship("SaleReturn", back_populates="sale", lazy="selectin")
+    payments = relationship("SalePayment", back_populates="sale", lazy="selectin", cascade="all, delete-orphan")
+
+class SalePayment(Base):
+    __tablename__ = "sale_payments"
+    sale_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sales.id"), index=True)
+    cash_session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cash_sessions.id"), nullable=True, index=True)
+    payment_method: Mapped[str] = mapped_column(String)  # CASH, CARD, BANK, MOBILE, etc.
+    amount: Mapped[float] = mapped_column(Numeric(10, 2))
+    reference: Mapped[str] = mapped_column(String, nullable=True)  # txn / auth code / note
+
+    sale = relationship("Sale", back_populates="payments")
 
 class SaleItem(Base):
     __tablename__ = "sale_items"

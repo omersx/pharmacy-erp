@@ -2,7 +2,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.modules.medicines.models import MedicineBatch
-from app.modules.sales.models import Sale, SaleItem, SaleReturn, SaleReturnItem
+from app.modules.sales.models import Sale, SaleItem, SaleReturn, SaleReturnItem, SalePayment
 from app.modules.sales.schemas import SaleCreate, SaleReturnCreate
 from app.modules.cash_sessions.models import CashSession
 from app.modules.inventory.models import InventoryMovement
@@ -118,6 +118,44 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
         if found_session:
             session_id = found_session.id
 
+    # Process payments (split payments or single payment)
+    payments_to_record = []
+    if sale_data.payments and len(sale_data.payments) > 0:
+        total_payments = sum(Decimal(str(p.amount)) for p in sale_data.payments)
+        if total_payments < total_amount - Decimal('0.01'):
+            raise ValidationError(
+                f"Insufficient payment for sale. Total due: {total_amount:.2f}, Total provided: {total_payments:.2f}"
+            )
+        
+        methods_set = {p.payment_method.strip().upper() for p in sale_data.payments}
+        if len(methods_set) == 1:
+            overall_payment_method = list(methods_set)[0]
+        else:
+            overall_payment_method = "SPLIT"
+
+        for p in sale_data.payments:
+            p_method = p.payment_method.strip().upper()
+            payments_to_record.append(
+                SalePayment(
+                    cash_session_id=session_id if p_method == "CASH" or session_id else None,
+                    payment_method=p_method,
+                    amount=float(Decimal(str(p.amount))),
+                    reference=p.reference.strip() if p.reference else None
+                )
+            )
+    else:
+        # Legacy single payment fallback
+        p_method = (sale_data.payment_method or "CASH").strip().upper()
+        overall_payment_method = p_method
+        payments_to_record.append(
+            SalePayment(
+                cash_session_id=session_id,
+                payment_method=p_method,
+                amount=float(total_amount),
+                reference=None
+            )
+        )
+
     sale = Sale(
         invoice_number=invoice_number,
         branch_id=branch_id,
@@ -128,12 +166,16 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
         tax_amount=0.0,
         profit_amount=float(total_profit),
         total_amount=float(total_amount),
-        payment_method=sale_data.payment_method,
+        payment_method=overall_payment_method,
         customer_id=sale_data.customer_id,
         cash_session_id=session_id
     )
     db.add(sale)
     await db.flush()
+
+    for p in payments_to_record:
+        p.sale_id = sale.id
+        db.add(p)
 
     for si in sale_items:
         si.sale_id = sale.id

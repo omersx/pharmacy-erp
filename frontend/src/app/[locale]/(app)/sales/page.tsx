@@ -287,7 +287,11 @@ export default function SalesHistoryPage() {
                           {currency} {Number(sale.total_amount).toFixed(2)}
                         </td>
                         <td className="px-6 py-4 text-center hidden md:table-cell">
-                          <Badge variant="default" className="uppercase text-xs">{sale.payment_method}</Badge>
+                          {sale.payment_method === 'SPLIT' ? (
+                            <Badge variant="warning" className="uppercase text-xs font-semibold">SPLIT</Badge>
+                          ) : (
+                            <Badge variant="default" className="uppercase text-xs">{sale.payment_method}</Badge>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-right">
                           {sale.status === 'COMPLETED' ? (
@@ -436,9 +440,27 @@ export default function SalesHistoryPage() {
                     </div>
                     <div className="bg-background rounded-lg p-4 border border-border">
                       <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Payment</p>
-                      <p className="text-sm font-semibold text-foreground uppercase">
-                        {selectedSale.payment_method}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-foreground uppercase">
+                          {selectedSale.payment_method}
+                        </p>
+                        {selectedSale.payment_method === 'SPLIT' && (
+                          <Badge variant="warning" className="text-[10px] px-1.5 py-0.5">SPLIT</Badge>
+                        )}
+                      </div>
+                      {selectedSale.payments && selectedSale.payments.length > 0 && (
+                        <div className="mt-2 space-y-1 border-t border-border/50 pt-2 text-xs">
+                          {selectedSale.payments.map((p: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-muted-foreground">
+                              <span>
+                                {p.payment_method}
+                                {p.reference ? ` (${p.reference})` : ''}:
+                              </span>
+                              <span className="font-semibold text-foreground">{currency} {Number(p.amount).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 

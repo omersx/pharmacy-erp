@@ -14,6 +14,7 @@ interface SaleReceiptProps {
     items: { medicine_id: string; quantity: number; unit_price: number; line_total: number; name?: string }[];
     total_amount: number;
     payment_method: string;
+    payments?: { payment_method: string; method_name?: string; amount: number; reference?: string }[];
     customer?: { id: string; name: string } | null;
   } | null;
 }
@@ -101,7 +102,22 @@ export function SaleReceipt({ open, onClose, saleData }: SaleReceiptProps) {
 
             {/* Payment Info */}
             <div className="text-xs mb-6">
-              <p>Payment Method: <span className="capitalize">{saleData.payment_method}</span></p>
+              {saleData.payments && saleData.payments.length > 0 ? (
+                <div className="space-y-1">
+                  <p className="font-semibold text-gray-700">Payment Breakdown:</p>
+                  {saleData.payments.map((p, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs">
+                      <span>
+                        {p.method_name || p.payment_method}
+                        {p.reference ? ` (${p.reference})` : ''}:
+                      </span>
+                      <span className="font-medium">{formatMoney(p.amount, currency)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>Payment Method: <span className="capitalize">{saleData.payment_method}</span></p>
+              )}
             </div>
 
             {/* Footer */}
