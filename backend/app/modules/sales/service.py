@@ -36,7 +36,7 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
                 MedicineBatch.medicine_id == item.medicine_id,
                 MedicineBatch.branch_id == branch_id,
                 MedicineBatch.is_active == True,
-                MedicineBatch.status == "ACTIVE",
+                MedicineBatch.status.in_(["ACTIVE", "NEAR_EXPIRY"]),
                 MedicineBatch.quantity_remaining > 0
             )
             .where(MedicineBatch.expiry_date > datetime.now(timezone.utc))

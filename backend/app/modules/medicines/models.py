@@ -1,6 +1,7 @@
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, Boolean, Numeric, ForeignKey, Integer, DateTime
 from app.core.database import Base
+from app.modules.organizations.models import Branch
 import uuid
 from datetime import datetime
 
@@ -53,3 +54,6 @@ class MedicineBatch(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(String, default="ACTIVE")
     notes: Mapped[str] = mapped_column(String, nullable=True)
+
+    medicine = relationship("Medicine", lazy="selectin")
+    branch = relationship("Branch", lazy="selectin")

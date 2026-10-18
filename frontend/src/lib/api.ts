@@ -107,11 +107,23 @@ export const api = {
     return fetchApi(`/inventory/movements${qs ? `?${qs}` : ''}`);
   },
   getMedicineMovements: (medicineId: string) => fetchApi(`/inventory/movements?medicine_id=${medicineId}`),
-  // Inventory Alerts
+  // Inventory Alerts & Expiry Control
   getLowStock: () => fetchApi('/inventory/alerts/low-stock'),
   getOutOfStock: () => fetchApi('/inventory/alerts/out-of-stock'),
   getExpiring: () => fetchApi('/inventory/alerts/expiring'),
   getExpired: () => fetchApi('/inventory/alerts/expired'),
+  getExpiryDashboard: (params?: { branch_id?: string; bucket_filter?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    if (params?.bucket_filter && params.bucket_filter !== 'ALL') q.append('bucket_filter', params.bucket_filter);
+    const qs = q.toString();
+    return fetchApi(`/inventory/expiry-dashboard${qs ? `?${qs}` : ''}`);
+  },
+  updateBatchStatus: (batchId: string, data: { status: string; reason: string; reference?: string; quantity_to_dispose?: number }) =>
+    fetchApi(`/inventory/batches/${batchId}/status`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   
   // Sales
   processSale: (data: any) => fetchApi('/sales/', {

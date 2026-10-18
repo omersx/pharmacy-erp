@@ -11,10 +11,11 @@ import {
   Search, Plus, Settings2, Clock, Package, AlertTriangle,
   TrendingDown, DollarSign, ArrowUpCircle, ArrowDownCircle,
   Hash, Calendar, Truck, X, RefreshCw, Calculator, FileText,
-  ShieldCheck, AlertCircle, CheckCircle2, History
+  ShieldCheck, AlertCircle, CheckCircle2, History, ShieldAlert
 } from 'lucide-react';
 import { cn, formatCompactNumber, formatMoney } from '@/lib/utils';
 import { useRouter, useParams } from 'next/navigation';
+import { ExpiryCenter } from './ExpiryCenter';
 
 // ─── Types ───────────────────────────────────────────────────────────────
 interface StockItem {
@@ -30,7 +31,7 @@ export default function InventoryPage() {
   const { currency } = useAppStore();
 
   // ── Tab State ──
-  const [activeTab, setActiveTab] = useState<'catalog' | 'ledger'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'ledger' | 'expiry'>('catalog');
 
   // ── Data State ──
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
@@ -368,6 +369,18 @@ export default function InventoryPage() {
                 <History size={16} />
                 Inventory Ledger & Movements
               </button>
+              <button
+                onClick={() => setActiveTab('expiry')}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all",
+                  activeTab === 'expiry'
+                    ? "bg-brand-500 text-white shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <ShieldAlert size={16} />
+                Expiry & Recall Center
+              </button>
             </div>
 
             <button
@@ -696,6 +709,11 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          TAB 3: EXPIRY & RECALL CONTROL CENTER (ISSUES #11 & #12)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'expiry' && <ExpiryCenter />}
 
       {/* ═══════════════════════════════════════════════════════════════════
           SLIDE-OVER: Add New Batch (Stock Intake)
