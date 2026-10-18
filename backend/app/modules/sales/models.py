@@ -15,6 +15,8 @@ class Sale(Base):
     status: Mapped[str] = mapped_column(String)
     subtotal: Mapped[float] = mapped_column(Numeric(10, 2))
     discount_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    tax_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    profit_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2))
     payment_method: Mapped[str] = mapped_column(String)
     notes: Mapped[str] = mapped_column(String, nullable=True)
@@ -29,8 +31,10 @@ class SaleItem(Base):
     batch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medicine_batches.id"))
     quantity: Mapped[float] = mapped_column(Numeric(10, 2))
     unit_price: Mapped[float] = mapped_column(Numeric(10, 2))
+    unit_cost: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     discount_percent: Mapped[float] = mapped_column(Numeric(5, 2), default=0)
     line_total: Mapped[float] = mapped_column(Numeric(10, 2))
+    profit: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     
     sale = relationship("Sale", back_populates="items")
 

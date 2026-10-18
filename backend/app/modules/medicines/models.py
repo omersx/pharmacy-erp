@@ -40,9 +40,10 @@ class Medicine(Base):
 
 class MedicineBatch(Base):
     __tablename__ = "medicine_batches"
-    medicine_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medicines.id"))
+    medicine_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medicines.id"), index=True)
+    branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), index=True)
     batch_number: Mapped[str] = mapped_column(String)
-    expiry_date: Mapped[datetime] = mapped_column(DateTime)
+    expiry_date: Mapped[datetime] = mapped_column(DateTime, index=True)
     purchase_price: Mapped[float] = mapped_column(Numeric(10, 2))
     quantity_received: Mapped[float] = mapped_column(Numeric(10, 2))
     quantity_remaining: Mapped[float] = mapped_column(Numeric(10, 2))

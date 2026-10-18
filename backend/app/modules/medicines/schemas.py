@@ -86,6 +86,7 @@ class MedicineResponse(MedicineCreate):
 
 class InitialBatch(BaseModel):
     batch_number: Optional[str] = None
+    branch_id: Optional[uuid.UUID] = None
     quantity: Decimal
     purchase_price: Decimal
     production_date: Optional[datetime] = None
@@ -97,6 +98,7 @@ class MedicineCreateWithBatch(MedicineCreate):
 
 class BatchCreate(BaseModel):
     batch_number: str
+    branch_id: Optional[uuid.UUID] = None
     expiry_date: datetime
     purchase_price: Decimal
     quantity_received: Decimal
@@ -105,6 +107,7 @@ class BatchCreate(BaseModel):
     notes: Optional[str] = None
 
 class BatchUpdate(BaseModel):
+    branch_id: Optional[uuid.UUID] = None
     expiry_date: Optional[datetime] = None
     purchase_price: Optional[Decimal] = None
     production_date: Optional[datetime] = None
@@ -114,6 +117,7 @@ class BatchUpdate(BaseModel):
 class BatchResponse(BaseModel):
     id: uuid.UUID
     medicine_id: uuid.UUID
+    branch_id: Optional[uuid.UUID] = None
     batch_number: str
     expiry_date: datetime
     purchase_price: Decimal

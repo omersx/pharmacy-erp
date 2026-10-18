@@ -115,10 +115,18 @@ async def add_batch(id: UUID, data: BatchCreate, db: AsyncSession = Depends(get_
     if not medicine:
         raise HTTPException(status_code=404, detail="Medicine not found")
     
-    # Check for existing batch with same batch_number
+    # Get branch for batch and movement
+    branch_id = data.branch_id
+    if not branch_id:
+        branch_res = await db.execute(select(Branch).limit(1))
+        branch = branch_res.scalars().first()
+        branch_id = branch.id if branch else None
+    
+    # Check for existing batch with same batch_number in this branch
     existing_res = await db.execute(
         select(MedicineBatch).where(
             MedicineBatch.medicine_id == id,
+            MedicineBatch.branch_id == branch_id,
             MedicineBatch.batch_number == data.batch_number
         )
     )
@@ -137,17 +145,14 @@ async def add_batch(id: UUID, data: BatchCreate, db: AsyncSession = Depends(get_
             if existing_batch.status == "OUT_OF_STOCK":
                 existing_batch.status = "ACTIVE"
             
-            # Get branch for movement
-            branch_res = await db.execute(select(Branch).limit(1))
-            branch = branch_res.scalars().first()
-            
             # Log stock receipt movement
             movement = InventoryMovement(
                 medicine_id=id,
                 batch_id=existing_batch.id,
-                branch_id=branch.id if branch else None,
+                branch_id=branch_id,
                 movement_type="STOCK_RECEIPT",
                 quantity=float(data.quantity_received),
+                unit_cost=float(existing_batch.purchase_price),
                 reference_type="BATCH_MERGE",
                 notes=f"Merged {data.quantity_received} units into existing batch {data.batch_number}",
                 created_by=current_user.id
@@ -170,27 +175,26 @@ async def add_batch(id: UUID, data: BatchCreate, db: AsyncSession = Depends(get_
                 }
             )
     
-    # NEW BATCH: No duplicate found
+    # NEW BATCH: No duplicate found in this branch
+    batch_dict = data.model_dump()
+    batch_dict["branch_id"] = branch_id
     batch = MedicineBatch(
         medicine_id=id,
         quantity_remaining=data.quantity_received,
         status="ACTIVE",
-        **data.model_dump()
+        **batch_dict
     )
     db.add(batch)
     await db.flush()
-    
-    # Get branch for movement
-    branch_res = await db.execute(select(Branch).limit(1))
-    branch = branch_res.scalars().first()
     
     # Log stock receipt movement
     movement = InventoryMovement(
         medicine_id=id,
         batch_id=batch.id,
-        branch_id=branch.id if branch else None,
+        branch_id=branch_id,
         movement_type="STOCK_RECEIPT",
         quantity=float(data.quantity_received),
+        unit_cost=float(data.purchase_price),
         reference_type="NEW_BATCH",
         notes=f"New batch {data.batch_number} added with {data.quantity_received} units",
         created_by=current_user.id
@@ -590,9 +594,16 @@ async def create_medicine_with_batch(
     await db.flush()  # get medicine.id without committing
     
     if batch_data:
+        branch_id = batch_data.branch_id
+        if not branch_id:
+            branch_res = await db.execute(select(Branch).limit(1))
+            branch = branch_res.scalars().first()
+            branch_id = branch.id if branch else None
+            
         batch_number = batch_data.batch_number or f"BATCH-{medicine.sku}-001"
         batch = MedicineBatch(
             medicine_id=medicine.id,
+            branch_id=branch_id,
             batch_number=batch_number,
             expiry_date=batch_data.expiry_date,
             purchase_price=batch_data.purchase_price,

@@ -36,11 +36,14 @@ async def list_sales(
     end_date: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    branch_id: Optional[uuid.UUID] = None,
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
     query = select(Sale).order_by(desc(Sale.created_at))
     
+    if branch_id:
+        query = query.where(Sale.branch_id == branch_id)
     if status and status != 'ALL':
         query = query.where(Sale.status == status)
     if search:

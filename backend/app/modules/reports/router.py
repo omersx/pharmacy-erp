@@ -101,8 +101,9 @@ async def financial_profit(
     current_user: User = Depends(get_current_user)
 ):
     cogs_query = select(
-        func.sum(SaleItem.quantity * MedicineBatch.purchase_price).label("cogs")
-    ).join(Sale, Sale.id == SaleItem.sale_id).join(MedicineBatch, MedicineBatch.id == SaleItem.batch_id).where(Sale.status == "COMPLETED")
+        func.sum(SaleItem.quantity * SaleItem.unit_cost).label("cogs"),
+        func.sum(SaleItem.profit).label("total_profit")
+    ).join(Sale, Sale.id == SaleItem.sale_id).where(Sale.status == "COMPLETED")
     
     if start_date:
         cogs_query = cogs_query.where(func.date(Sale.created_at) >= start_date)
@@ -111,7 +112,8 @@ async def financial_profit(
         
     cogs_result = await db.execute(cogs_query)
     cogs_row = cogs_result.first()
-    cogs = float(cogs_row.cogs or 0)
+    cogs = float((cogs_row.cogs if cogs_row else 0) or 0)
+    profit = float((cogs_row.total_profit if cogs_row else 0) or 0)
     
     revenue_query = select(func.sum(Sale.total_amount).label("revenue")).where(Sale.status == "COMPLETED")
     if start_date:
@@ -126,7 +128,7 @@ async def financial_profit(
     return {
         "revenue": revenue,
         "cogs": cogs,
-        "profit": revenue - cogs
+        "profit": profit if profit > 0 else (revenue - cogs)
     }
 
 @router.get("/customers/balances")

@@ -26,12 +26,18 @@ class SaleItemResponse(BaseModel):
     batch_id: uuid.UUID
     quantity: Decimal
     unit_price: Decimal
+    unit_cost: Optional[Decimal] = Decimal('0.0')
     line_total: Decimal
+    profit: Optional[Decimal] = Decimal('0.0')
     model_config = {"from_attributes": True}
 
 class SaleResponse(BaseModel):
     id: uuid.UUID
     invoice_number: str
+    subtotal: Optional[Decimal] = None
+    discount_amount: Optional[Decimal] = Decimal('0.0')
+    tax_amount: Optional[Decimal] = Decimal('0.0')
+    profit_amount: Optional[Decimal] = Decimal('0.0')
     total_amount: Decimal
     status: str
     payment_method: str

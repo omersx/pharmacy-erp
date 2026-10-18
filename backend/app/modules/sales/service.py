@@ -10,19 +10,35 @@ from datetime import datetime
 
 async def create_sale(db: AsyncSession, sale_data, branch_id: uuid.UUID, cashier_id: uuid.UUID):
     total_amount = Decimal('0.0')
+    total_profit = Decimal('0.0')
     sale_items = []
     movements = []
 
+    # Check if DB dialect supports row locking
+    is_sqlite = False
+    try:
+        bind = db.bind or (db.sync_session.bind if hasattr(db, "sync_session") else None)
+        if bind and "sqlite" in getattr(bind.dialect, "name", ""):
+            is_sqlite = True
+    except Exception:
+        pass
+
     for item in sale_data.items:
-        result = await db.execute(
+        query = (
             select(MedicineBatch)
             .where(MedicineBatch.medicine_id == item.medicine_id)
+            .where(MedicineBatch.branch_id == branch_id)
             .where(MedicineBatch.quantity_remaining > 0)
             .where(MedicineBatch.is_active == True)
             .where(MedicineBatch.expiry_date > datetime.utcnow())
             .where(MedicineBatch.status.in_(["ACTIVE", "NEAR_EXPIRY"]))
             .order_by(MedicineBatch.expiry_date.asc())
         )
+        
+        if not is_sqlite:
+            query = query.with_for_update()
+
+        result = await db.execute(query)
         batches = result.scalars().all()
 
         qty_needed = Decimal(str(item.quantity))
@@ -32,20 +48,34 @@ async def create_sale(db: AsyncSession, sale_data, branch_id: uuid.UUID, cashier
                 break
                 
             available = Decimal(str(batch.quantity_remaining))
+            if available <= Decimal('0.0'):
+                continue
+
             take = min(available, qty_needed)
-            
-            batch.quantity_remaining = float(available - take)
+            new_remaining = available - take
+            batch.quantity_remaining = float(new_remaining)
+            if new_remaining <= Decimal('0.0'):
+                batch.status = "OUT_OF_STOCK"
+                
             qty_needed -= take
             
-            line_total = take * Decimal(str(item.unit_price))
+            unit_price = Decimal(str(item.unit_price))
+            unit_cost = Decimal(str(batch.purchase_price or 0))
+            line_total = take * unit_price
+            line_profit = (unit_price - unit_cost) * take
+            
             sale_items.append(SaleItem(
                 medicine_id=item.medicine_id,
                 batch_id=batch.id,
                 quantity=float(take),
-                unit_price=float(item.unit_price),
-                line_total=float(line_total)
+                unit_price=float(unit_price),
+                unit_cost=float(unit_cost),
+                discount_percent=0.0,
+                line_total=float(line_total),
+                profit=float(line_profit)
             ))
             total_amount += line_total
+            total_profit += line_profit
             
             movements.append(InventoryMovement(
                 medicine_id=item.medicine_id,
@@ -53,13 +83,14 @@ async def create_sale(db: AsyncSession, sale_data, branch_id: uuid.UUID, cashier
                 branch_id=branch_id,
                 movement_type="SALE_OUT",
                 quantity=float(-take),
+                unit_cost=float(unit_cost),
                 created_by=cashier_id
             ))
             
-        if qty_needed > 0:
-            raise ValidationError(f"Insufficient stock for medicine {item.medicine_id}")
+        if qty_needed > Decimal('0.0'):
+            raise ValidationError(f"Insufficient stock for medicine {item.medicine_id} in branch {branch_id}")
 
-    invoice_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
+    invoice_number = f"INV-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
 
     sale = Sale(
         invoice_number=invoice_number,
@@ -67,6 +98,9 @@ async def create_sale(db: AsyncSession, sale_data, branch_id: uuid.UUID, cashier
         cashier_id=cashier_id,
         status="COMPLETED",
         subtotal=float(total_amount),
+        discount_amount=0.0,
+        tax_amount=0.0,
+        profit_amount=float(total_profit),
         total_amount=float(total_amount),
         payment_method=sale_data.payment_method,
         customer_id=sale_data.customer_id,
@@ -82,6 +116,7 @@ async def create_sale(db: AsyncSession, sale_data, branch_id: uuid.UUID, cashier
     for mv in movements:
         mv.reference_id = str(sale.id)
         mv.reference_type = "SALE"
+        mv.notes = f"Sale invoice {invoice_number}"
         db.add(mv)
 
     await db.commit()
@@ -101,24 +136,27 @@ async def return_sale(db: AsyncSession, sale_id: uuid.UUID, cashier_id: uuid.UUI
     items_result = await db.execute(select(SaleItem).where(SaleItem.sale_id == sale_id))
     sale_items = items_result.scalars().all()
     
-    from decimal import Decimal
     for item in sale_items:
-        # Restore stock
+        # Restore stock to corresponding batch
         batch_result = await db.execute(select(MedicineBatch).where(MedicineBatch.id == item.batch_id))
         batch = batch_result.scalars().first()
         if batch:
             batch.quantity_remaining = float(Decimal(str(batch.quantity_remaining)) + Decimal(str(item.quantity)))
+            if batch.status == "OUT_OF_STOCK" and batch.quantity_remaining > 0:
+                batch.status = "ACTIVE"
             
-        # Create return movement
+        # Create return movement in ledger
         mv = InventoryMovement(
             medicine_id=item.medicine_id,
             batch_id=item.batch_id,
             branch_id=sale.branch_id,
             movement_type="RETURN_IN",
             quantity=float(item.quantity),
+            unit_cost=float(item.unit_cost or 0),
             created_by=cashier_id,
             reference_id=str(sale.id),
-            reference_type="SALE_RETURN"
+            reference_type="SALE_RETURN",
+            notes=f"Return of invoice {sale.invoice_number}"
         )
         db.add(mv)
         

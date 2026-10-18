@@ -10,6 +10,7 @@ class InventoryMovement(Base):
     branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"))
     movement_type: Mapped[str] = mapped_column(String)
     quantity: Mapped[float] = mapped_column(Numeric(10, 2))
+    unit_cost: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     reference_type: Mapped[str] = mapped_column(String, nullable=True)
     reference_id: Mapped[str] = mapped_column(String, nullable=True)
     notes: Mapped[str] = mapped_column(String, nullable=True)

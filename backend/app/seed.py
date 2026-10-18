@@ -254,10 +254,15 @@ async def seed_demo_data(db, level_2_cats):
         medicines.append(m)
     await db.commit()
 
+    branch_res = await db.execute(select(Branch).limit(1))
+    branch = branch_res.scalars().first()
+    branch_id = branch.id if branch else None
+
     now = datetime.utcnow()
     for idx, m in enumerate(medicines):
         b1 = MedicineBatch(
             medicine_id=m.id,
+            branch_id=branch_id,
             batch_number=f"BATCH-A-{idx}",
             production_date=now - timedelta(days=120),
             expiry_date=now + timedelta(days=60),
@@ -268,6 +273,7 @@ async def seed_demo_data(db, level_2_cats):
         )
         b2 = MedicineBatch(
             medicine_id=m.id,
+            branch_id=branch_id,
             batch_number=f"BATCH-B-{idx}",
             production_date=now - timedelta(days=185),
             expiry_date=now + timedelta(days=180),
