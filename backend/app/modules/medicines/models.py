@@ -39,11 +39,14 @@ class Medicine(Base):
     selling_price: Mapped[float] = mapped_column(Numeric(10, 2))
     image_url: Mapped[str] = mapped_column(String, nullable=True)
 
+    barcodes = relationship("MedicineBarcode", back_populates="medicine", lazy="selectin", cascade="all, delete-orphan")
+
 class MedicineBatch(Base):
     __tablename__ = "medicine_batches"
     medicine_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medicines.id"), index=True)
     branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), index=True)
     batch_number: Mapped[str] = mapped_column(String)
+    barcode: Mapped[str] = mapped_column(String, nullable=True, index=True)
     expiry_date: Mapped[datetime] = mapped_column(DateTime, index=True)
     purchase_price: Mapped[float] = mapped_column(Numeric(10, 2))
     quantity_received: Mapped[float] = mapped_column(Numeric(10, 2))
@@ -57,3 +60,18 @@ class MedicineBatch(Base):
 
     medicine = relationship("Medicine", lazy="selectin")
     branch = relationship("Branch", lazy="selectin")
+
+class MedicineBarcode(Base):
+    __tablename__ = "medicine_barcodes"
+    medicine_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medicines.id"), index=True)
+    batch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medicine_batches.id"), nullable=True, index=True)
+    barcode: Mapped[str] = mapped_column(String, unique=True, index=True)
+    barcode_type: Mapped[str] = mapped_column(String, default="ALTERNATE")  # PRIMARY, ALTERNATE, BATCH, PACKAGING
+    packaging_type: Mapped[str] = mapped_column(String, nullable=True, default="UNIT")  # UNIT, STRIP, BOX, CARTON
+    units_per_pack: Mapped[int] = mapped_column(Integer, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    notes: Mapped[str] = mapped_column(String, nullable=True)
+
+    medicine = relationship("Medicine", back_populates="barcodes")
+    batch = relationship("MedicineBatch", lazy="selectin")
+

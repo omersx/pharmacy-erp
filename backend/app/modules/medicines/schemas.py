@@ -98,6 +98,7 @@ class MedicineCreateWithBatch(MedicineCreate):
 
 class BatchCreate(BaseModel):
     batch_number: str
+    barcode: Optional[str] = None
     branch_id: Optional[uuid.UUID] = None
     expiry_date: datetime
     purchase_price: Decimal
@@ -107,6 +108,8 @@ class BatchCreate(BaseModel):
     notes: Optional[str] = None
 
 class BatchUpdate(BaseModel):
+    batch_number: Optional[str] = None
+    barcode: Optional[str] = None
     branch_id: Optional[uuid.UUID] = None
     expiry_date: Optional[datetime] = None
     purchase_price: Optional[Decimal] = None
@@ -119,6 +122,7 @@ class BatchResponse(BaseModel):
     medicine_id: uuid.UUID
     branch_id: Optional[uuid.UUID] = None
     batch_number: str
+    barcode: Optional[str] = None
     expiry_date: datetime
     purchase_price: Decimal
     quantity_received: Decimal
@@ -131,6 +135,53 @@ class BatchResponse(BaseModel):
     notes: Optional[str] = None
     model_config = {"from_attributes": True}
 
+class BarcodeCreate(BaseModel):
+    barcode: str
+    barcode_type: str = "ALTERNATE"  # PRIMARY, ALTERNATE, BATCH, PACKAGING
+    packaging_type: Optional[str] = "UNIT"  # UNIT, STRIP, BOX, CARTON
+    units_per_pack: int = 1
+    batch_id: Optional[uuid.UUID] = None
+    notes: Optional[str] = None
+
+class BarcodeResponse(BaseModel):
+    id: uuid.UUID
+    medicine_id: uuid.UUID
+    batch_id: Optional[uuid.UUID] = None
+    barcode: str
+    barcode_type: str
+    packaging_type: Optional[str] = "UNIT"
+    units_per_pack: int = 1
+    is_active: bool = True
+    notes: Optional[str] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+class BarcodeScanResult(BaseModel):
+    found: bool
+    barcode: str
+    match_type: str  # BATCH, PACKAGING, PRIMARY, ALTERNATE
+    medicine_id: uuid.UUID
+    medicine_name: str
+    medicine_sku: str
+    selling_price: Decimal
+    effective_price: Decimal
+    units_multiplier: int = 1
+    packaging_type: Optional[str] = "UNIT"
+    requires_prescription: bool = False
+    available_stock: Decimal
+    is_sellable: bool
+    batch_id: Optional[uuid.UUID] = None
+    batch_number: Optional[str] = None
+    expiry_date: Optional[datetime] = None
+    status: Optional[str] = "ACTIVE"
+    notes: Optional[str] = None
+
+class BarcodeCheckResponse(BaseModel):
+    available: bool
+    barcode: str
+    conflict_message: Optional[str] = None
+    assigned_to: Optional[str] = None
+
 class BatchConflictResponse(BaseModel):
     """Returned when a batch number already exists with a different expiry date"""
     conflict: bool = True
@@ -141,6 +192,7 @@ class BatchConflictResponse(BaseModel):
 
 class MedicineDetailResponse(MedicineResponse):
     batches: List[BatchResponse] = []
+    barcodes: List[BarcodeResponse] = []
     category_name: Optional[str] = None
 
 class BulkImportRowError(BaseModel):

@@ -92,6 +92,23 @@ export const api = {
   createBatch: (medicineId: string, data: any) => fetchApi(`/medicines/${medicineId}/batches`, { method: 'POST', body: JSON.stringify(data) }),
   updateBatch: (medicineId: string, batchId: string, data: any) => fetchApi(`/medicines/${medicineId}/batches/${batchId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deactivateBatch: (medicineId: string, batchId: string) => fetchApi(`/medicines/${medicineId}/batches/${batchId}`, { method: 'DELETE' }),
+
+  // Barcodes
+  scanBarcode: (barcode: string, branchId?: string) =>
+    fetchApi<any>(`/medicines/barcode/scan/${encodeURIComponent(barcode)}${branchId ? `?branch_id=${branchId}` : ''}`),
+  checkBarcode: (barcode: string, excludeType?: string, excludeId?: string) => {
+    const q = new URLSearchParams({ barcode });
+    if (excludeType) q.append('exclude_type', excludeType);
+    if (excludeId) q.append('exclude_id', excludeId);
+    return fetchApi<{ barcode: string; is_unique: boolean; conflict_type: string | null; conflict_details: any }>(
+      `/medicines/check-barcode?${q.toString()}`
+    );
+  },
+  getMedicineBarcodes: (medicineId: string) => fetchApi<any[]>(`/medicines/${medicineId}/barcodes`),
+  addMedicineBarcode: (medicineId: string, data: any) =>
+    fetchApi<any>(`/medicines/${medicineId}/barcodes`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteMedicineBarcode: (medicineId: string, barcodeId: string) =>
+    fetchApi<any>(`/medicines/${medicineId}/barcodes/${barcodeId}`, { method: 'DELETE' }),
   
   // Inventory
   getStock: (branchId?: string) => fetchApi(`/inventory/stock${branchId ? `?branch_id=${branchId}` : ''}`),

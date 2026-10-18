@@ -1,23 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from app.core.audit import log_action
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.modules.auth.models import User
-from app.modules.medicines.models import Medicine, MedicineBatch, MedicineCategory
+from app.modules.medicines.models import Medicine, MedicineBatch, MedicineCategory, MedicineBarcode
 from app.modules.medicines.schemas import (
     MedicineCreate, MedicineUpdate, MedicineResponse, 
     BatchCreate, BatchUpdate, BatchResponse, BatchConflictResponse,
     CategoryCreate, CategoryResponse,
     CategoryUpdate, CategoryTreeResponse, MedicineCreateWithBatch, MedicineDetailResponse,
-    BulkImportResponse, BulkImportRowError
+    BulkImportResponse, BulkImportRowError,
+    BarcodeCreate, BarcodeResponse, BarcodeScanResult, BarcodeCheckResponse
 )
 from app.modules.inventory.models import InventoryMovement
 from app.modules.organizations.models import Branch
-from typing import List
+from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 from fastapi.responses import JSONResponse, StreamingResponse
 import csv
 import io
@@ -25,6 +27,67 @@ from openpyxl import load_workbook
 from app.modules.medicines.template_generator import generate_csv_template, generate_xlsx_template, BASE_UNITS, DOSAGE_FORMS
 
 router = APIRouter(tags=["Medicines"])
+
+async def check_barcode_uniqueness(
+    db: AsyncSession, 
+    barcode: str, 
+    exclude_type: Optional[str] = None, # 'MEDICINE', 'BATCH', 'BARCODE'
+    exclude_id: Optional[UUID] = None
+) -> Optional[dict]:
+    """
+    Checks whether a barcode is already in use by any Medicine, MedicineBatch, or MedicineBarcode.
+    Returns None if available, or a dict describing the conflict if duplicate.
+    """
+    if not barcode or not barcode.strip():
+        return None
+    code = barcode.strip()
+
+    # 1. Check Medicine.barcode
+    med_q = select(Medicine).where(Medicine.barcode == code, Medicine.is_active == True)
+    if exclude_type == 'MEDICINE' and exclude_id:
+        med_q = med_q.where(Medicine.id != exclude_id)
+    med_res = await db.execute(med_q)
+    med = med_res.scalars().first()
+    if med:
+        return {
+            "entity": "Medicine Primary Barcode",
+            "medicine_id": str(med.id),
+            "medicine_name": med.name_en,
+            "message": f"Barcode '{code}' is already assigned as the primary barcode for medicine '{med.name_en}' ({med.sku})."
+        }
+
+    # 2. Check MedicineBatch.barcode
+    batch_q = select(MedicineBatch, Medicine).join(Medicine, MedicineBatch.medicine_id == Medicine.id).where(MedicineBatch.barcode == code, MedicineBatch.is_active == True)
+    if exclude_type == 'BATCH' and exclude_id:
+        batch_q = batch_q.where(MedicineBatch.id != exclude_id)
+    batch_res = await db.execute(batch_q)
+    batch_row = batch_res.first()
+    if batch_row:
+        batch, b_med = batch_row
+        return {
+            "entity": "Batch Barcode",
+            "medicine_id": str(b_med.id),
+            "medicine_name": b_med.name_en,
+            "batch_number": batch.batch_number,
+            "message": f"Barcode '{code}' is already assigned to batch '{batch.batch_number}' of medicine '{b_med.name_en}'."
+        }
+
+    # 3. Check MedicineBarcode
+    mb_q = select(MedicineBarcode, Medicine).join(Medicine, MedicineBarcode.medicine_id == Medicine.id).where(MedicineBarcode.barcode == code, MedicineBarcode.is_active == True)
+    if exclude_type == 'BARCODE' and exclude_id:
+        mb_q = mb_q.where(MedicineBarcode.id != exclude_id)
+    mb_res = await db.execute(mb_q)
+    mb_row = mb_res.first()
+    if mb_row:
+        mb, mb_med = mb_row
+        return {
+            "entity": f"Alternate {mb.barcode_type} Barcode",
+            "medicine_id": str(mb_med.id),
+            "medicine_name": mb_med.name_en,
+            "message": f"Barcode '{code}' is already registered as an alternate {mb.barcode_type} barcode for '{mb_med.name_en}'."
+        }
+
+    return None
 
 @router.get("", response_model=List[MedicineResponse], include_in_schema=False)
 @router.get("/", response_model=List[MedicineResponse])
@@ -34,14 +97,30 @@ async def list_medicines(db: AsyncSession = Depends(get_db)):
 
 @router.get("/search", response_model=List[MedicineResponse])
 async def search_medicines(q: str, db: AsyncSession = Depends(get_db)):
+    term = q.strip()
+    # Also find medicines matching alternate or batch barcodes
+    alt_ids_q = select(MedicineBarcode.medicine_id).where(MedicineBarcode.barcode == term, MedicineBarcode.is_active == True)
+    alt_res = await db.execute(alt_ids_q)
+    alt_med_ids = list(alt_res.scalars().all())
+
+    batch_ids_q = select(MedicineBatch.medicine_id).where(MedicineBatch.barcode == term, MedicineBatch.is_active == True)
+    batch_res = await db.execute(batch_ids_q)
+    batch_med_ids = list(batch_res.scalars().all())
+
+    combined_ids = list(set(alt_med_ids + batch_med_ids))
+
+    conditions = [
+        Medicine.name_en.ilike(f"%{term}%"),
+        Medicine.name_ar.ilike(f"%{term}%"),
+        Medicine.barcode == term,
+        Medicine.sku == term
+    ]
+    if combined_ids:
+        conditions.append(Medicine.id.in_(combined_ids))
+
     query = select(Medicine).where(
         Medicine.is_active == True,
-        or_(
-            Medicine.name_en.ilike(f"%{q}%"),
-            Medicine.name_ar.ilike(f"%{q}%"),
-            Medicine.barcode == q,
-            Medicine.sku == q
-        )
+        or_(*conditions)
     ).limit(50)
     res = await db.execute(query)
     return res.scalars().all()
@@ -49,6 +128,11 @@ async def search_medicines(q: str, db: AsyncSession = Depends(get_db)):
 @router.post("", response_model=MedicineResponse, include_in_schema=False)
 @router.post("/", response_model=MedicineResponse)
 async def create_medicine(data: MedicineCreate, request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if data.barcode and data.barcode.strip():
+        conflict = await check_barcode_uniqueness(db, data.barcode.strip())
+        if conflict:
+            raise HTTPException(status_code=409, detail=conflict["message"])
+
     medicine = Medicine(**data.model_dump())
     db.add(medicine)
     await db.commit()
@@ -68,8 +152,14 @@ async def update_medicine(id: UUID, data: MedicineUpdate, db: AsyncSession = Dep
     medicine = await db.get(Medicine, id)
     if not medicine:
         raise HTTPException(status_code=404, detail="Medicine not found")
+
+    update_dict = data.model_dump(exclude_unset=True)
+    if "barcode" in update_dict and update_dict["barcode"]:
+        conflict = await check_barcode_uniqueness(db, update_dict["barcode"].strip(), exclude_type='MEDICINE', exclude_id=id)
+        if conflict:
+            raise HTTPException(status_code=409, detail=conflict["message"])
         
-    for key, value in data.model_dump(exclude_unset=True).items():
+    for key, value in update_dict.items():
         setattr(medicine, key, value)
         
     await db.commit()
@@ -114,6 +204,11 @@ async def add_batch(id: UUID, data: BatchCreate, db: AsyncSession = Depends(get_
     medicine = await db.get(Medicine, id)
     if not medicine:
         raise HTTPException(status_code=404, detail="Medicine not found")
+
+    if data.barcode and data.barcode.strip():
+        conflict = await check_barcode_uniqueness(db, data.barcode.strip())
+        if conflict:
+            raise HTTPException(status_code=409, detail=conflict["message"])
     
     # Get branch for batch and movement
     branch_id = data.branch_id
@@ -215,8 +310,14 @@ async def update_batch(
     batch = await db.get(MedicineBatch, batch_id)
     if not batch or batch.medicine_id != id:
         raise HTTPException(status_code=404, detail="Batch not found")
+
+    update_dict = data.model_dump(exclude_unset=True)
+    if "barcode" in update_dict and update_dict["barcode"]:
+        conflict = await check_barcode_uniqueness(db, update_dict["barcode"].strip(), exclude_type='BATCH', exclude_id=batch_id)
+        if conflict:
+            raise HTTPException(status_code=409, detail=conflict["message"])
     
-    for key, value in data.model_dump(exclude_unset=True).items():
+    for key, value in update_dict.items():
         setattr(batch, key, value)
     
     await db.commit()
@@ -618,6 +719,247 @@ async def create_medicine_with_batch(
     await db.refresh(medicine)
     return medicine
 
+@router.get("/check-barcode", response_model=BarcodeCheckResponse)
+async def check_barcode(barcode: str, db: AsyncSession = Depends(get_db)):
+    """Check if a barcode is available or already used across the system."""
+    conflict = await check_barcode_uniqueness(db, barcode)
+    if conflict:
+        return BarcodeCheckResponse(
+            available=False,
+            barcode=barcode,
+            conflict_message=conflict["message"],
+            assigned_to=conflict["medicine_name"]
+        )
+    return BarcodeCheckResponse(available=True, barcode=barcode)
+
+@router.get("/barcode/scan/{barcode}", response_model=BarcodeScanResult)
+async def scan_barcode(barcode: str, branch_id: Optional[UUID] = None, db: AsyncSession = Depends(get_db)):
+    """
+    Rapid Unified Barcode Scanner Endpoint:
+    Resolves Primary barcodes, Packaging barcodes, Alternate barcodes, and Batch barcodes.
+    Returns medicine info, resolved/best FEFO batch, pack multiplier, and sellable status.
+    """
+    code = barcode.strip()
+    now = datetime.now(timezone.utc)
+
+    # 1. Try MedicineBarcode (Packaging / Alternate / Batch Barcode)
+    mb_res = await db.execute(
+        select(MedicineBarcode, Medicine)
+        .join(Medicine, MedicineBarcode.medicine_id == Medicine.id)
+        .where(MedicineBarcode.barcode == code, MedicineBarcode.is_active == True)
+    )
+    mb_row = mb_res.first()
+    if mb_row:
+        mb, med = mb_row
+        selected_batch = None
+        if mb.batch_id:
+            batch_res = await db.execute(select(MedicineBatch).where(MedicineBatch.id == mb.batch_id))
+            selected_batch = batch_res.scalars().first()
+
+        # If no specific batch on the barcode, resolve via FEFO
+        if not selected_batch:
+            fefo_q = select(MedicineBatch).where(
+                MedicineBatch.medicine_id == med.id,
+                MedicineBatch.quantity_remaining > 0,
+                MedicineBatch.is_active == True,
+                MedicineBatch.status.in_(["ACTIVE", "NEAR_EXPIRY"]),
+                MedicineBatch.expiry_date > now
+            )
+            if branch_id:
+                fefo_q = fefo_q.where(MedicineBatch.branch_id == branch_id)
+            fefo_q = fefo_q.order_by(MedicineBatch.expiry_date.asc())
+            selected_batch = (await db.execute(fefo_q)).scalars().first()
+
+        # Calculate total available stock across active batches
+        stock_q = select(func.coalesce(func.sum(MedicineBatch.quantity_remaining), 0)).where(
+            MedicineBatch.medicine_id == med.id,
+            MedicineBatch.is_active == True,
+            MedicineBatch.status.in_(["ACTIVE", "NEAR_EXPIRY"]),
+            MedicineBatch.expiry_date > now
+        )
+        if branch_id:
+            stock_q = stock_q.where(MedicineBatch.branch_id == branch_id)
+        total_stock = (await db.execute(stock_q)).scalar_one()
+
+        multiplier = mb.units_per_pack or 1
+        unit_price = Decimal(str(med.selling_price or 0))
+        effective_price = unit_price * multiplier
+
+        is_sellable = bool(total_stock > 0 and selected_batch is not None)
+
+        return BarcodeScanResult(
+            found=True,
+            barcode=code,
+            match_type=mb.barcode_type or "PACKAGING",
+            medicine_id=med.id,
+            medicine_name=med.name_en,
+            medicine_sku=med.sku,
+            selling_price=unit_price,
+            effective_price=effective_price,
+            units_multiplier=multiplier,
+            packaging_type=mb.packaging_type or "UNIT",
+            requires_prescription=med.requires_prescription or False,
+            available_stock=Decimal(str(total_stock)),
+            is_sellable=is_sellable,
+            batch_id=selected_batch.id if selected_batch else None,
+            batch_number=selected_batch.batch_number if selected_batch else None,
+            expiry_date=selected_batch.expiry_date if selected_batch else None,
+            status=selected_batch.status if selected_batch else "OUT_OF_STOCK",
+            notes=mb.notes
+        )
+
+    # 2. Try MedicineBatch.barcode (Specific batch barcode)
+    batch_res = await db.execute(
+        select(MedicineBatch, Medicine)
+        .join(Medicine, MedicineBatch.medicine_id == Medicine.id)
+        .where(MedicineBatch.barcode == code, MedicineBatch.is_active == True)
+    )
+    b_row = batch_res.first()
+    if b_row:
+        batch, med = b_row
+        stock_q = select(func.coalesce(func.sum(MedicineBatch.quantity_remaining), 0)).where(
+            MedicineBatch.medicine_id == med.id,
+            MedicineBatch.is_active == True,
+            MedicineBatch.status.in_(["ACTIVE", "NEAR_EXPIRY"]),
+            MedicineBatch.expiry_date > now
+        )
+        total_stock = (await db.execute(stock_q)).scalar_one()
+
+        batch_exp = batch.expiry_date.replace(tzinfo=timezone.utc) if batch.expiry_date.tzinfo is None else batch.expiry_date
+        is_sellable = (
+            float(batch.quantity_remaining or 0) > 0 and 
+            batch.status in ["ACTIVE", "NEAR_EXPIRY"] and 
+            batch_exp > now
+        )
+
+        return BarcodeScanResult(
+            found=True,
+            barcode=code,
+            match_type="BATCH",
+            medicine_id=med.id,
+            medicine_name=med.name_en,
+            medicine_sku=med.sku,
+            selling_price=Decimal(str(med.selling_price or 0)),
+            effective_price=Decimal(str(med.selling_price or 0)),
+            units_multiplier=1,
+            packaging_type="UNIT",
+            requires_prescription=med.requires_prescription or False,
+            available_stock=Decimal(str(total_stock)),
+            is_sellable=is_sellable,
+            batch_id=batch.id,
+            batch_number=batch.batch_number,
+            expiry_date=batch.expiry_date,
+            status=batch.status,
+            notes=batch.notes
+        )
+
+    # 3. Try Medicine.barcode or Medicine.sku
+    med_res = await db.execute(
+        select(Medicine).where(
+            Medicine.is_active == True,
+            or_(Medicine.barcode == code, Medicine.sku == code)
+        )
+    )
+    med = med_res.scalars().first()
+    if med:
+        fefo_q = select(MedicineBatch).where(
+            MedicineBatch.medicine_id == med.id,
+            MedicineBatch.quantity_remaining > 0,
+            MedicineBatch.is_active == True,
+            MedicineBatch.status.in_(["ACTIVE", "NEAR_EXPIRY"]),
+            MedicineBatch.expiry_date > now
+        )
+        if branch_id:
+            fefo_q = fefo_q.where(MedicineBatch.branch_id == branch_id)
+        fefo_q = fefo_q.order_by(MedicineBatch.expiry_date.asc())
+        selected_batch = (await db.execute(fefo_q)).scalars().first()
+
+        stock_q = select(func.coalesce(func.sum(MedicineBatch.quantity_remaining), 0)).where(
+            MedicineBatch.medicine_id == med.id,
+            MedicineBatch.is_active == True,
+            MedicineBatch.status.in_(["ACTIVE", "NEAR_EXPIRY"]),
+            MedicineBatch.expiry_date > now
+        )
+        if branch_id:
+            stock_q = stock_q.where(MedicineBatch.branch_id == branch_id)
+        total_stock = (await db.execute(stock_q)).scalar_one()
+
+        unit_price = Decimal(str(med.selling_price or 0))
+        is_sellable = bool(total_stock > 0 and selected_batch is not None)
+
+        return BarcodeScanResult(
+            found=True,
+            barcode=code,
+            match_type="PRIMARY",
+            medicine_id=med.id,
+            medicine_name=med.name_en,
+            medicine_sku=med.sku,
+            selling_price=unit_price,
+            effective_price=unit_price,
+            units_multiplier=1,
+            packaging_type="UNIT",
+            requires_prescription=med.requires_prescription or False,
+            available_stock=Decimal(str(total_stock)),
+            is_sellable=is_sellable,
+            batch_id=selected_batch.id if selected_batch else None,
+            batch_number=selected_batch.batch_number if selected_batch else None,
+            expiry_date=selected_batch.expiry_date if selected_batch else None,
+            status=selected_batch.status if selected_batch else "OUT_OF_STOCK"
+        )
+
+    raise HTTPException(status_code=404, detail=f"No product or batch found matching barcode '{code}'")
+
+@router.get("/{id}/barcodes", response_model=List[BarcodeResponse])
+async def list_medicine_barcodes(id: UUID, db: AsyncSession = Depends(get_db)):
+    """List all registered alternate & packaging barcodes for a medicine."""
+    res = await db.execute(select(MedicineBarcode).where(MedicineBarcode.medicine_id == id))
+    return res.scalars().all()
+
+@router.post("/{id}/barcodes", response_model=BarcodeResponse)
+async def add_medicine_barcode(
+    id: UUID, 
+    data: BarcodeCreate, 
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Register a new alternate, packaging, or batch-specific barcode."""
+    med = await db.get(Medicine, id)
+    if not med:
+        raise HTTPException(status_code=404, detail="Medicine not found")
+
+    conflict = await check_barcode_uniqueness(db, data.barcode.strip())
+    if conflict:
+        raise HTTPException(status_code=409, detail=conflict["message"])
+
+    mb = MedicineBarcode(
+        medicine_id=id,
+        batch_id=data.batch_id,
+        barcode=data.barcode.strip(),
+        barcode_type=data.barcode_type.upper(),
+        packaging_type=data.packaging_type or "UNIT",
+        units_per_pack=data.units_per_pack or 1,
+        notes=data.notes
+    )
+    db.add(mb)
+    await db.commit()
+    await db.refresh(mb)
+    return mb
+
+@router.delete("/{id}/barcodes/{barcode_id}")
+async def delete_medicine_barcode(
+    id: UUID, 
+    barcode_id: UUID, 
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Delete an alternate barcode."""
+    mb = await db.get(MedicineBarcode, barcode_id)
+    if not mb or mb.medicine_id != id:
+        raise HTTPException(status_code=404, detail="Barcode not found")
+    await db.delete(mb)
+    await db.commit()
+    return {"success": True, "message": "Barcode deleted successfully"}
+
 @router.get("/{id}", response_model=MedicineDetailResponse)
 async def get_medicine(id: UUID, db: AsyncSession = Depends(get_db)):
     medicine = await db.get(Medicine, id)
@@ -629,6 +971,12 @@ async def get_medicine(id: UUID, db: AsyncSession = Depends(get_db)):
         select(MedicineBatch).where(MedicineBatch.medicine_id == id)
     )
     batches = batch_res.scalars().all()
+
+    # Get barcodes
+    barcode_res = await db.execute(
+        select(MedicineBarcode).where(MedicineBarcode.medicine_id == id)
+    )
+    barcodes = barcode_res.scalars().all()
     
     # Get category name
     category_name = None
@@ -640,5 +988,6 @@ async def get_medicine(id: UUID, db: AsyncSession = Depends(get_db)):
     return {
         **{c.name: getattr(medicine, c.name) for c in medicine.__table__.columns},
         "batches": batches,
+        "barcodes": barcodes,
         "category_name": category_name
     }

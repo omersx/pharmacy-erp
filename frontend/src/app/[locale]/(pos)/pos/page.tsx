@@ -169,12 +169,61 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
 
   // Shared barcode scan handler (used by both USB scanner and camera scanner)
   const handleBarcodeScan = useCallback(
-    (scannedCode: string) => {
-      // First, try local lookup by product ID or barcode
+    async (scannedCode: string) => {
+      const code = scannedCode.trim();
+      if (!code) return;
+
+      try {
+        // 1. Unified Barcode Lookup (Primary, Alternate, Packaging, Batch)
+        const scanRes: any = await api.scanBarcode(code, (session as any)?.branch_id);
+
+        if (scanRes && scanRes.medicine_id) {
+          // Sellability check (strictly blocks expired, quarantined, or recalled batches)
+          if (!scanRes.is_sellable) {
+            playError();
+            flashElement('red', searchInputRef.current);
+            toast.error(scanRes.sellable_status_reason || `${scanRes.medicine_name} cannot be sold`);
+            return;
+          }
+
+          const qtyToAdd = scanRes.units_multiplier || 1;
+          const displayName =
+            scanRes.match_type === 'PACKAGING' && scanRes.packaging_type
+              ? `${scanRes.medicine_name} (${scanRes.packaging_type} x${qtyToAdd})`
+              : scanRes.medicine_name;
+
+          addItem({
+            medicine_id: scanRes.medicine_id,
+            name: displayName,
+            batch: scanRes.batch_number || '-',
+            lot_number: scanRes.batch_number || '-',
+            quantity: qtyToAdd,
+            unit_price: scanRes.unit_price,
+          });
+
+          playSuccess();
+          flashElement('green', searchInputRef.current);
+
+          let successMsg = `✅ ${scanRes.medicine_name}`;
+          if (scanRes.match_type === 'PACKAGING') {
+            successMsg += ` (${scanRes.packaging_type} x${qtyToAdd})`;
+          } else if (scanRes.match_type === 'BATCH' && scanRes.batch_number) {
+            successMsg += ` [Batch: ${scanRes.batch_number}]`;
+          }
+          toast.success(successMsg);
+          setSearch('');
+          setShowDropdown(false);
+          return;
+        }
+      } catch (scanErr: any) {
+        // Fall through to local fallback lookup if scan resolution threw
+      }
+
+      // 2. Fallback: Local search by product ID or exact name
       const found = products.find(
         (p) =>
-          p.id === scannedCode ||
-          p.name.toLowerCase() === scannedCode.toLowerCase()
+          p.id === code ||
+          p.name.toLowerCase() === code.toLowerCase()
       );
 
       if (found) {
@@ -185,35 +234,12 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
         return;
       }
 
-      // Fallback: search via API (matches barcode field in database)
-      api
-        .searchMedicines(scannedCode)
-        .then((res: any) => {
-          if (Array.isArray(res) && res.length > 0) {
-            const match = products.find((p) => p.medicine_id === res[0].id);
-            if (match) {
-              handleProductClick(match);
-              playSuccess();
-              flashElement('green', searchInputRef.current);
-              toast.success(`✅ Scanned: ${match.name}`);
-            } else {
-              playError();
-              flashElement('red', searchInputRef.current);
-              toast.error(`Scanned item not in stock catalog`);
-            }
-          } else {
-            playError();
-            flashElement('red', searchInputRef.current);
-            toast.error(`Barcode not found: ${scannedCode}`);
-          }
-        })
-        .catch(() => {
-          playError();
-          flashElement('red', searchInputRef.current);
-          toast.error(`Product not found for code: ${scannedCode}`);
-        });
+      // If neither resolved
+      playError();
+      flashElement('red', searchInputRef.current);
+      toast.error(`Barcode not recognized: ${code}`);
     },
-    [products, handleProductClick, playSuccess, playError, flashElement]
+    [session, products, handleProductClick, addItem, playSuccess, playError, flashElement]
   );
 
   // USB/Bluetooth hardware barcode scanner hook

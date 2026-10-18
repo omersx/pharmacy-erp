@@ -768,16 +768,25 @@ export default function ProductsPage() {
         isOpen={scannerOpen}
         onClose={() => setScannerOpen(false)}
         title="Scan Barcode / QR Code"
-        onScan={(code) => {
+        onScan={async (code) => {
           setScannerOpen(false);
-          // Check if barcode already exists in loaded medicines
-          const exists = medicines.find(m => m.barcode === code);
-          if (exists) {
-            playError();
-            toast.error(`Barcode belongs to existing medicine: ${exists.name_en}`);
-          } else {
+          try {
+            const check = await api.checkBarcode(code, editingId ? 'medicine' : undefined, editingId || undefined);
+            if (!check.is_unique) {
+              playError();
+              let msg = 'Barcode already in use';
+              if (check.conflict_details?.medicine_name) {
+                msg = `Barcode in use by: ${check.conflict_details.medicine_name}`;
+              }
+              toast.error(msg);
+              return;
+            }
             playSuccess();
-            setFormData(prev => ({ ...prev, barcode: code }));
+            setFormData((prev) => ({ ...prev, barcode: code }));
+            toast.success("Barcode scanned & unique!");
+          } catch {
+            playSuccess();
+            setFormData((prev) => ({ ...prev, barcode: code }));
             toast.success("Barcode filled!");
           }
         }}
