@@ -10,10 +10,12 @@ import {
   Search, Calendar, Filter, Receipt, ArrowLeftRight, 
   ChevronRight, AlertCircle, RefreshCw, X, Calculator,
   TrendingUp, TrendingDown, CheckCircle2, ArrowDownCircle,
-  ArrowUpCircle, DollarSign, Clock, ShieldAlert, CreditCard
+  ArrowUpCircle, DollarSign, Clock, ShieldAlert, CreditCard,
+  RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as Dialog from '@radix-ui/react-dialog';
+import { ReturnModal } from './ReturnModal';
 
 export default function SalesHistoryPage() {
   const [activeTab, setActiveTab] = useState<'sales' | 'sessions'>('sales');
@@ -26,6 +28,7 @@ export default function SalesHistoryPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedSale, setSelectedSale] = useState<any | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [isReturning, setIsReturning] = useState(false);
 
   // Cash Sessions State
@@ -80,13 +83,11 @@ export default function SalesHistoryPage() {
   const openSaleDetails = async (sale: any) => {
     setSelectedSale(sale);
     setDetailsOpen(true);
-    if (!sale.items || sale.items.length === 0) {
-      try {
-        const fullSale = await api.getSaleById(sale.id);
-        setSelectedSale(fullSale);
-      } catch (e) {
-        toast.error('Failed to load sale details');
-      }
+    try {
+      const fullSale = await api.getSaleById(sale.id);
+      setSelectedSale(fullSale);
+    } catch (e) {
+      console.error('Failed to load full sale details', e);
     }
   };
 
@@ -194,10 +195,16 @@ export default function SalesHistoryPage() {
                 Completed
               </button>
               <button
+                onClick={() => setStatusFilter('PARTIALLY_RETURNED')}
+                className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", statusFilter === 'PARTIALLY_RETURNED' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
+              >
+                Partially Returned
+              </button>
+              <button
                 onClick={() => setStatusFilter('RETURNED')}
                 className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", statusFilter === 'RETURNED' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
               >
-                Returned
+                Fully Returned
               </button>
             </div>
           </div>
@@ -285,8 +292,10 @@ export default function SalesHistoryPage() {
                         <td className="px-6 py-4 text-right">
                           {sale.status === 'COMPLETED' ? (
                             <Badge variant="success">Completed</Badge>
+                          ) : sale.status === 'PARTIALLY_RETURNED' ? (
+                            <Badge variant="warning">Partially Returned</Badge>
                           ) : (
-                            <Badge variant="danger">Returned</Badge>
+                            <Badge variant="danger">Fully Returned</Badge>
                           )}
                         </td>
                       </tr>
@@ -401,7 +410,9 @@ export default function SalesHistoryPage() {
                   <div>
                     <Dialog.Title className="text-xl font-bold text-foreground flex items-center gap-2">
                       {selectedSale.invoice_number}
-                      {selectedSale.status === 'RETURNED' && <Badge variant="danger">Refunded</Badge>}
+                      {selectedSale.status === 'RETURNED' && <Badge variant="danger">Fully Refunded</Badge>}
+                      {selectedSale.status === 'PARTIALLY_RETURNED' && <Badge variant="warning">Partially Returned</Badge>}
+                      {selectedSale.status === 'COMPLETED' && <Badge variant="success">Completed</Badge>}
                     </Dialog.Title>
                     <Dialog.Description className="text-sm text-muted-foreground mt-1">
                       {selectedSale.created_at ? format(new Date(selectedSale.created_at), 'PPP at p') : ''}
@@ -434,16 +445,41 @@ export default function SalesHistoryPage() {
                   {/* Items List */}
                   <div>
                     <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4">Receipt Items</h3>
-                    <div className="space-y-4">
-                      {selectedSale.items?.map((item: any, i: number) => (
-                        <div key={i} className="flex justify-between items-start py-2 border-b border-border/50 last:border-0">
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Medicine ID: {item.medicine_id.substring(0,8)}</p>
-                            <p className="text-xs text-muted-foreground">{item.quantity} x {currency} {Number(item.unit_price).toFixed(2)}</p>
+                    <div className="space-y-3">
+                      {selectedSale.items?.map((item: any, i: number) => {
+                        const originalQty = Number(item.quantity) || 0;
+                        const returnedQty = Number(item.quantity_returned) || 0;
+                        const remainingQty = Math.max(0, originalQty - returnedQty);
+
+                        return (
+                          <div key={i} className="flex justify-between items-start py-2.5 border-b border-border/50 last:border-0">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">
+                                {item.medicine_name || item.medicine?.name_en || `Medicine #${item.medicine_id.substring(0,8)}`}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                {item.batch_number && (
+                                  <span className="font-mono bg-background px-1.5 py-0.5 rounded border border-border">
+                                    {item.batch_number}
+                                  </span>
+                                )}
+                                <span>{originalQty} sold @ {currency} {Number(item.unit_price).toFixed(2)}</span>
+                                {returnedQty > 0 && (
+                                  <span className="text-amber-500 font-semibold">
+                                    ({returnedQty} returned)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-bold text-foreground">{currency} {Number(item.line_total).toFixed(2)}</p>
+                              {returnedQty > 0 && remainingQty > 0 && (
+                                <p className="text-[11px] text-muted-foreground">{remainingQty} remaining</p>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-sm font-bold text-foreground">{currency} {Number(item.line_total).toFixed(2)}</p>
-                        </div>
-                      ))}
+                        );
+                      })}
                       
                       {!selectedSale.items?.length && (
                         <div className="py-4 text-center text-sm text-muted-foreground">Loading items...</div>
@@ -451,36 +487,100 @@ export default function SalesHistoryPage() {
                     </div>
                   </div>
 
+                  {/* Returns History Section if any returns exist */}
+                  {selectedSale.returns && selectedSale.returns.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                        <RotateCcw size={15} />
+                        Return Audit History ({selectedSale.returns.length})
+                      </div>
+
+                      <div className="space-y-3">
+                        {selectedSale.returns.map((ret: any) => (
+                          <div key={ret.id} className="rounded-xl bg-background border border-border p-3.5 space-y-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 font-mono font-bold text-foreground">
+                                <span className="text-brand-500">{ret.return_number}</span>
+                                <Badge variant="outline" className="uppercase text-[10px]">{ret.refund_method}</Badge>
+                              </div>
+                              <span className="font-bold text-rose-500 text-sm">
+                                -{currency} {Number(ret.total_refund).toFixed(2)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-muted-foreground">
+                              <span>{ret.created_at ? format(new Date(ret.created_at), 'MMM dd, yyyy - hh:mm a') : '-'}</span>
+                              {ret.reason && <span className="italic truncate max-w-[180px]">{ret.reason}</span>}
+                            </div>
+
+                            {/* Returned item pills */}
+                            {ret.items && ret.items.length > 0 && (
+                              <div className="pt-2 border-t border-border/50 space-y-1.5">
+                                {ret.items.map((rit: any) => (
+                                  <div key={rit.id} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5 truncate max-w-[200px]">
+                                      <span className="font-medium text-foreground">{rit.medicine_name || 'Item'}:</span>
+                                      <span className="text-muted-foreground">{rit.quantity} returned</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <span className={cn(
+                                        "px-1.5 py-0.5 rounded text-[10px] font-semibold border",
+                                        rit.condition === 'GOOD' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                      )}>
+                                        {rit.condition}
+                                      </span>
+                                      <span className={cn(
+                                        "px-1.5 py-0.5 rounded text-[10px] font-semibold border",
+                                        rit.disposition === 'RESTOCK' ? "bg-blue-500/10 text-blue-500 border-blue-500/20" : "bg-purple-500/10 text-purple-500 border-purple-500/20"
+                                      )}>
+                                        {rit.disposition}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Totals */}
                   <div className="bg-background rounded-lg p-5 border border-border">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm text-muted-foreground">Subtotal</span>
+                      <span className="text-sm text-muted-foreground">Original Total</span>
                       <span className="text-sm text-foreground">{currency} {Number(selectedSale.total_amount).toFixed(2)}</span>
                     </div>
+                    {Boolean(selectedSale.returns && selectedSale.returns.length > 0) && (
+                      <div className="flex justify-between items-center mb-2 text-rose-500">
+                        <span className="text-sm font-medium">Total Refunded</span>
+                        <span className="text-sm font-semibold">
+                          -{currency} {selectedSale.returns.reduce((sum: number, r: any) => sum + Number(r.total_refund || 0), 0).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center py-2 border-t border-border mt-2">
-                      <span className="text-lg font-bold text-foreground">Total</span>
-                      <span className="text-lg font-black text-brand-400">{currency} {Number(selectedSale.total_amount).toFixed(2)}</span>
+                      <span className="text-lg font-bold text-foreground">Net Retained</span>
+                      <span className="text-lg font-black text-brand-400">
+                        {currency} {(Number(selectedSale.total_amount) - (selectedSale.returns?.reduce((sum: number, r: any) => sum + Number(r.total_refund || 0), 0) || 0)).toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 {/* Footer Action */}
                 <div className="flex-none p-6 border-t border-border bg-background/50">
-                  {selectedSale.status === 'COMPLETED' ? (
+                  {selectedSale.status !== 'RETURNED' ? (
                     <button
-                      onClick={handleProcessReturn}
-                      disabled={isReturning}
-                      className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-medium py-3 rounded-xl transition-colors disabled:opacity-50"
+                      onClick={() => setReturnModalOpen(true)}
+                      className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-xl transition-all shadow-md shadow-brand-500/20"
                     >
-                      {isReturning ? (
-                        <><RefreshCw className="h-5 w-5 animate-spin" /> Processing...</>
-                      ) : (
-                        <><ArrowLeftRight className="h-5 w-5" /> Process Full Refund</>
-                      )}
+                      <RotateCcw className="h-5 w-5" /> Process Return / Refund
                     </button>
                   ) : (
                     <div className="w-full flex items-center justify-center gap-2 bg-gray-200 dark:bg-gray-800 text-muted-foreground font-medium py-3 rounded-xl">
-                      <AlertCircle className="h-5 w-5" /> Already Refunded
+                      <AlertCircle className="h-5 w-5" /> Fully Refunded
                     </div>
                   )}
                 </div>
@@ -689,6 +789,18 @@ export default function SalesHistoryPage() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      {/* Sales Return & Condition Inspection Modal */}
+      <ReturnModal
+        isOpen={returnModalOpen}
+        onClose={() => setReturnModalOpen(false)}
+        sale={selectedSale}
+        currency={currency}
+        onReturnSuccess={(updatedSale) => {
+          setSelectedSale(updatedSale);
+          fetchSales();
+        }}
+      />
     </div>
   );
 }

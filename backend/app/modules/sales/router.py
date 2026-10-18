@@ -4,9 +4,9 @@ from sqlalchemy import select, desc
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.modules.auth.models import User
-from app.modules.sales.schemas import SaleCreate, SaleResponse
+from app.modules.sales.schemas import SaleCreate, SaleResponse, SaleReturnCreate, SaleReturnResponse
 from app.modules.sales.service import create_sale, return_sale
-from app.modules.sales.models import Sale
+from app.modules.sales.models import Sale, SaleReturn
 import uuid
 from typing import List, Optional
 
@@ -73,7 +73,22 @@ async def get_sale(sale_id: uuid.UUID, db: AsyncSession = Depends(get_db), curre
     return sale
 
 @router.post("/{sale_id}/return", response_model=SaleResponse)
-async def process_return(sale_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    sale = await return_sale(db, sale_id, current_user.id)
+async def process_return(
+    sale_id: uuid.UUID, 
+    return_in: Optional[SaleReturnCreate] = None,
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    sale = await return_sale(db, sale_id, current_user.id, return_in)
     return sale
+
+@router.get("/{sale_id}/returns", response_model=List[SaleReturnResponse])
+async def get_sale_returns(
+    sale_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query = select(SaleReturn).where(SaleReturn.sale_id == sale_id).order_by(SaleReturn.created_at.desc())
+    result = await db.execute(query)
+    return result.scalars().all()
 

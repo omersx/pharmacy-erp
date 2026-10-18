@@ -130,8 +130,12 @@ export const api = {
     }
     return fetchApi(url);
   },
+  returnSale: (id: string, data?: any) => fetchApi(`/sales/${id}/return`, {
+    method: 'POST',
+    body: data ? JSON.stringify(data) : undefined,
+  }),
   getSaleById: (id: string) => fetchApi(`/sales/${id}`),
-  returnSale: (id: string) => fetchApi(`/sales/${id}/return`, { method: 'POST' }),
+  getSaleReturns: (id: string) => fetchApi(`/sales/${id}/returns`),
   
   // Suppliers
   getSuppliers: () => fetchApi('/suppliers'),

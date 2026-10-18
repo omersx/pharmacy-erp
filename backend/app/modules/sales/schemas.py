@@ -23,12 +23,57 @@ class CustomerSimple(BaseModel):
 class SaleItemResponse(BaseModel):
     id: uuid.UUID
     medicine_id: uuid.UUID
+    medicine_name: Optional[str] = None
     batch_id: uuid.UUID
+    batch_number: Optional[str] = None
     quantity: Decimal
+    quantity_returned: Optional[Decimal] = Decimal('0.0')
     unit_price: Decimal
     unit_cost: Optional[Decimal] = Decimal('0.0')
     line_total: Decimal
     profit: Optional[Decimal] = Decimal('0.0')
+    model_config = {"from_attributes": True}
+
+class SaleReturnItemCreate(BaseModel):
+    sale_item_id: uuid.UUID
+    quantity: Decimal
+    condition: str = "GOOD"         # GOOD, DAMAGED, EXPIRED, OPENED
+    disposition: str = "RESTOCK"     # RESTOCK, QUARANTINE, DISPOSAL
+    reason: Optional[str] = None
+
+class SaleReturnCreate(BaseModel):
+    items: Optional[List[SaleReturnItemCreate]] = None
+    refund_method: str = "CASH"     # CASH, CARD, STORE_CREDIT
+    reason: Optional[str] = None
+    cash_session_id: Optional[uuid.UUID] = None
+
+class SaleReturnItemResponse(BaseModel):
+    id: uuid.UUID
+    sale_item_id: uuid.UUID
+    medicine_id: uuid.UUID
+    medicine_name: Optional[str] = None
+    batch_id: uuid.UUID
+    batch_number: Optional[str] = None
+    quantity: Decimal
+    unit_price: Decimal
+    refund_amount: Decimal
+    condition: str
+    disposition: str
+    notes: Optional[str] = None
+    model_config = {"from_attributes": True}
+
+class SaleReturnResponse(BaseModel):
+    id: uuid.UUID
+    sale_id: uuid.UUID
+    return_number: str
+    branch_id: uuid.UUID
+    cashier_id: uuid.UUID
+    cash_session_id: Optional[uuid.UUID] = None
+    refund_method: str
+    total_refund: Decimal
+    reason: Optional[str] = None
+    created_at: datetime
+    items: List[SaleReturnItemResponse] = []
     model_config = {"from_attributes": True}
 
 class SaleResponse(BaseModel):
@@ -44,5 +89,5 @@ class SaleResponse(BaseModel):
     created_at: datetime
     customer: Optional[CustomerSimple] = None
     items: List[SaleItemResponse] = []
+    returns: List[SaleReturnResponse] = []
     model_config = {"from_attributes": True}
-

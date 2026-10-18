@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.modules.auth.models import User
 from app.modules.organizations.models import Branch
-from app.modules.sales.models import Sale
+from app.modules.sales.models import Sale, SaleReturn
 from app.modules.cash_sessions.models import CashSession, CashMovement
 from app.modules.cash_sessions.schemas import (
     CashSessionOpen,
@@ -25,12 +25,12 @@ router = APIRouter(tags=["cash-sessions"])
 
 async def calculate_session_totals(db: AsyncSession, session: CashSession):
     """Calculates all live financial aggregates for a cash session."""
-    # 1. Cash Sales
+    # 1. Cash Sales (Gross Cash collected during shift)
     cash_res = await db.execute(
         select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
             Sale.cash_session_id == session.id,
             Sale.payment_method == "CASH",
-            Sale.status == "COMPLETED"
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"])
         )
     )
     total_cash_sales = Decimal(str(cash_res.scalar() or 0))
@@ -40,7 +40,7 @@ async def calculate_session_totals(db: AsyncSession, session: CashSession):
         select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
             Sale.cash_session_id == session.id,
             Sale.payment_method.in_(["CARD", "BANK"]),
-            Sale.status == "COMPLETED"
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"])
         )
     )
     total_card_sales = Decimal(str(card_res.scalar() or 0))
@@ -50,7 +50,7 @@ async def calculate_session_totals(db: AsyncSession, session: CashSession):
         select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
             Sale.cash_session_id == session.id,
             ~Sale.payment_method.in_(["CASH", "CARD", "BANK"]),
-            Sale.status == "COMPLETED"
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"])
         )
     )
     total_other_sales = Decimal(str(other_res.scalar() or 0))
@@ -61,15 +61,24 @@ async def calculate_session_totals(db: AsyncSession, session: CashSession):
     )
     total_sales_count = int(count_res.scalar() or 0)
 
-    # 5. Cash Refunds (Returned Cash Sales)
-    refund_res = await db.execute(
+    # 5. Cash Refunds (from SaleReturn records linked to this session, plus legacy full returns)
+    ret_res = await db.execute(
+        select(func.coalesce(func.sum(SaleReturn.total_refund), 0)).where(
+            SaleReturn.cash_session_id == session.id,
+            SaleReturn.refund_method == "CASH"
+        )
+    )
+    total_cash_returns = Decimal(str(ret_res.scalar() or 0))
+
+    legacy_res = await db.execute(
         select(func.coalesce(func.sum(Sale.total_amount), 0)).where(
             Sale.cash_session_id == session.id,
             Sale.payment_method == "CASH",
-            Sale.status == "RETURNED"
+            Sale.status == "RETURNED",
+            ~Sale.id.in_(select(SaleReturn.sale_id))
         )
     )
-    total_cash_refunds = Decimal(str(refund_res.scalar() or 0))
+    total_cash_refunds = total_cash_returns + Decimal(str(legacy_res.scalar() or 0))
 
     # 6. Cash In movements
     cin_res = await db.execute(
