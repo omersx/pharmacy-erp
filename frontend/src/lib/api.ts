@@ -94,10 +94,18 @@ export const api = {
   deactivateBatch: (medicineId: string, batchId: string) => fetchApi(`/medicines/${medicineId}/batches/${batchId}`, { method: 'DELETE' }),
   
   // Inventory
-  getStock: () => fetchApi('/inventory/stock'),
-  getMedicineStock: (id: string) => fetchApi(`/inventory/stock/${id}`),
+  getStock: (branchId?: string) => fetchApi(`/inventory/stock${branchId ? `?branch_id=${branchId}` : ''}`),
+  getMedicineStock: (id: string, branchId?: string) => fetchApi(`/inventory/stock/${id}${branchId ? `?branch_id=${branchId}` : ''}`),
   createAdjustment: (data: any) => fetchApi('/inventory/adjustments', { method: 'POST', body: JSON.stringify(data) }),
-  getMovements: () => fetchApi('/inventory/movements'),
+  getMovements: (params?: { medicine_id?: string; movement_type?: string; branch_id?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.medicine_id) q.append('medicine_id', params.medicine_id);
+    if (params?.movement_type && params.movement_type !== 'ALL') q.append('movement_type', params.movement_type);
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    if (params?.limit) q.append('limit', String(params.limit));
+    const qs = q.toString();
+    return fetchApi(`/inventory/movements${qs ? `?${qs}` : ''}`);
+  },
   getMedicineMovements: (medicineId: string) => fetchApi(`/inventory/movements?medicine_id=${medicineId}`),
   // Inventory Alerts
   getLowStock: () => fetchApi('/inventory/alerts/low-stock'),
