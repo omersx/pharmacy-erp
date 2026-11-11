@@ -139,10 +139,12 @@ export const usePosStore = create<PosState>((set, get) => ({
         line_total: newQuantity * existingItem.unit_price,
       };
     } else {
+      const unitPrice = Number(item.unit_price || 0);
       const newItem: CartItem = {
         ...item,
+        unit_price: unitPrice,
         id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        line_total: item.quantity * item.unit_price,
+        line_total: item.quantity * unitPrice,
       };
       newCart.push(newItem);
     }

@@ -17,6 +17,8 @@ export interface Product {
   expiry: string;
   requires_prescription: boolean;
   favorite: boolean;
+  barcode?: string;
+  sku?: string;
 }
 
 interface ProductCatalogProps {

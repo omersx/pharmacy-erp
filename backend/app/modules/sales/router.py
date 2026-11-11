@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
+from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.modules.auth.models import User
 from app.modules.sales.schemas import SaleCreate, SaleResponse, SaleReturnCreate, SaleReturnResponse
-from app.modules.sales.service import create_sale, return_sale
-from app.modules.sales.models import Sale, SaleReturn
+from app.modules.sales.service import create_sale, return_sale, get_sale_by_id, sale_eager_options
+from app.modules.sales.models import Sale, SaleReturn, SaleReturnItem
 import uuid
 from typing import List, Optional
 
@@ -40,7 +41,7 @@ async def list_sales(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    query = select(Sale).order_by(desc(Sale.created_at))
+    query = select(Sale).options(*sale_eager_options()).order_by(desc(Sale.created_at))
     
     if branch_id:
         query = query.where(Sale.branch_id == branch_id)
@@ -66,8 +67,7 @@ async def list_sales(
 
 @router.get("/{sale_id}", response_model=SaleResponse)
 async def get_sale(sale_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    result = await db.execute(select(Sale).where(Sale.id == sale_id))
-    sale = result.scalars().first()
+    sale = await get_sale_by_id(db, sale_id)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     return sale
@@ -88,7 +88,14 @@ async def get_sale_returns(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = select(SaleReturn).where(SaleReturn.sale_id == sale_id).order_by(SaleReturn.created_at.desc())
+    query = (
+        select(SaleReturn)
+        .where(SaleReturn.sale_id == sale_id)
+        .options(
+            selectinload(SaleReturn.items).selectinload(SaleReturnItem.medicine),
+            selectinload(SaleReturn.items).selectinload(SaleReturnItem.batch),
+        )
+        .order_by(SaleReturn.created_at.desc())
+    )
     result = await db.execute(query)
     return result.scalars().all()
-

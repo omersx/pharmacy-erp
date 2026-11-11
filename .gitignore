@@ -52,6 +52,10 @@ desktop.ini
 ehthumbs.db
 Icon?
 
+# PWA icons must be tracked
+!frontend/public/icons/
+!frontend/public/icons/**
+
 # ----- Logs -----
 *.log
 npm-debug.log*
@@ -98,3 +102,10 @@ pos-ui.md
 
 # ----- Gemini / AI -----
 .gemini/
+
+
+# ----- PWA (generated service worker) -----
+frontend/public/sw.js
+frontend/public/sw.js.map
+frontend/public/swe-worker-*.js
+frontend/public/workbox-*.js

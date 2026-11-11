@@ -293,14 +293,16 @@ export default function MedicineDetailPage({ params }: { params: Promise<{ id: s
   }
 
   const activeBatches = medicine.batches?.filter((b: any) => b.status === 'ACTIVE' || b.status === 'NEAR_EXPIRY') || [];
-  const totalStock = activeBatches.reduce((acc: number, b: any) => acc + (b.quantity || 0), 0);
+  const getBatchQty = (b: any) => Number(b.quantity ?? b.quantity_remaining ?? b.quantity_received ?? 0);
+  const totalStock = activeBatches.reduce((acc: number, b: any) => acc + getBatchQty(b), 0);
   
   // Calculate average cost
   let totalValue = 0;
   let totalQty = 0;
   activeBatches.forEach((b: any) => {
-    totalValue += (b.purchase_price || 0) * (b.quantity || 0);
-    totalQty += (b.quantity || 0);
+    const qty = getBatchQty(b);
+    totalValue += (Number(b.purchase_price) || 0) * qty;
+    totalQty += qty;
   });
   const avgCost = totalQty > 0 ? (totalValue / totalQty).toFixed(2) : '0.00';
 
@@ -463,7 +465,7 @@ export default function MedicineDetailPage({ params }: { params: Promise<{ id: s
                           <span className="text-muted-foreground">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 font-medium">{batch.quantity}</td>
+                      <td className="px-6 py-4 font-medium">{batch.quantity ?? batch.quantity_remaining ?? batch.quantity_received ?? 0}</td>
                       <td className="px-6 py-4">{currency} {Number(batch.purchase_price).toFixed(2)}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1.5">

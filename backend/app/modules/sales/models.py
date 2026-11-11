@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, Numeric, ForeignKey, DateTime
+from sqlalchemy.orm.base import NO_VALUE
+from sqlalchemy import String, Numeric, ForeignKey, DateTime, inspect
 from app.core.database import Base
 import uuid
 from datetime import datetime, timezone
@@ -54,11 +55,25 @@ class SaleItem(Base):
 
     @property
     def medicine_name(self) -> str | None:
-        return self.medicine.name_en if self.medicine else None
+        try:
+            state = inspect(self)
+            med = state.attrs.medicine.loaded_value
+            if med is not NO_VALUE and med is not None:
+                return med.name_en or med.name_ar
+        except Exception:
+            pass
+        return None
 
     @property
     def batch_number(self) -> str | None:
-        return self.batch.batch_number if self.batch else None
+        try:
+            state = inspect(self)
+            b = state.attrs.batch.loaded_value
+            if b is not NO_VALUE and b is not None:
+                return b.batch_number
+        except Exception:
+            pass
+        return None
 
 class SaleReturn(Base):
     __tablename__ = "sale_returns"
@@ -93,11 +108,25 @@ class SaleReturnItem(Base):
 
     @property
     def medicine_name(self) -> str | None:
-        return self.medicine.name_en if self.medicine else None
+        try:
+            state = inspect(self)
+            med = state.attrs.medicine.loaded_value
+            if med is not NO_VALUE and med is not None:
+                return med.name_en or med.name_ar
+        except Exception:
+            pass
+        return None
 
     @property
     def batch_number(self) -> str | None:
-        return self.batch.batch_number if self.batch else None
+        try:
+            state = inspect(self)
+            b = state.attrs.batch.loaded_value
+            if b is not NO_VALUE and b is not None:
+                return b.batch_number
+        except Exception:
+            pass
+        return None
 
 class HeldSale(Base):
     __tablename__ = "held_sales"

@@ -86,7 +86,7 @@ async def test_alternate_and_packaging_barcode_registration(test_db):
     assert exc.value.status_code == 409
 
     # 3. Check-barcode endpoint returns conflict info
-    check_res = await check_barcode("6282002222222", test_db)
+    check_res = await check_barcode("6282002222222", db=test_db)
     assert check_res.available is False
     assert check_res.assigned_to == "Amoxicillin Capsules"
 

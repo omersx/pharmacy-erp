@@ -2,77 +2,115 @@
 
 import { useCallback, useRef } from 'react';
 
-const BEEP_DURATION = 150;
-const BEEP_VOLUME = 0.3;
+let sharedAudioCtx: AudioContext | null = null;
 
 /**
- * Creates a beep sound using the Web Audio API.
- * No external audio files needed — works everywhere.
+ * Safely retrieves and warms up the shared AudioContext.
+ * Reuses the context and ensures it is resumed to bypass browser autoplay restrictions.
  */
-function createBeep(frequency: number, duration: number, volume: number) {
+export function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
+    const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtxClass) return null;
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-
-    oscillator.frequency.value = frequency;
-    oscillator.type = 'sine';
-    gainNode.gain.value = volume;
-
-    oscillator.start();
-    oscillator.stop(audioCtx.currentTime + duration / 1000);
-
-    // Clean up
-    oscillator.onended = () => audioCtx.close();
+    if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+      sharedAudioCtx = new AudioCtxClass();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+    return sharedAudioCtx;
   } catch {
-    // Audio not supported — fail silently
+    return null;
+  }
+}
+
+/**
+ * Plays the classic retail/pharmacy barcode scanner beep.
+ * High-pitched (2000 Hz), crisp (85ms duration), clean exponential decay with no clicking.
+ */
+export function playScannerBeep() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(2000, now);
+
+    // Smooth envelope: 5ms linear attack to 0.6 volume, 80ms exponential decay
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.6, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.09);
+  } catch {
+    // Audio unsupported or blocked — fail silently
+  }
+}
+
+/**
+ * Plays an error/conflict rejection sound.
+ * Low-pitched (250 Hz) buzz to notify user of duplicate or sellability error.
+ */
+export function playScannerError() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(260, now);
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.35, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.23);
+  } catch {
+    // Audio unsupported or blocked — fail silently
   }
 }
 
 /**
  * Hook that provides audio and visual feedback for barcode scanning.
- * 
- * @example
- * ```tsx
- * const { playSuccess, playError, flashElement } = useScanFeedback();
- * 
- * // On successful scan
- * playSuccess();
- * flashElement('green');
- * 
- * // On failed scan
- * playError();
- * flashElement('red');
- * ```
  */
 export function useScanFeedback() {
   const flashTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const flashElementRef = useRef<HTMLElement | null>(null);
 
-  /** Play a success beep (high pitch) */
+  /** Play a success beep */
   const playSuccess = useCallback(() => {
-    createBeep(1200, BEEP_DURATION, BEEP_VOLUME);
-    // Double beep for success
-    setTimeout(() => createBeep(1500, BEEP_DURATION, BEEP_VOLUME), 100);
+    playScannerBeep();
   }, []);
 
-  /** Play an error beep (low pitch) */
+  /** Play an error beep */
   const playError = useCallback(() => {
-    createBeep(300, 300, BEEP_VOLUME);
+    playScannerError();
   }, []);
 
   /**
    * Flash the border of a target element green or red.
-   * Pass the element directly or use the ref returned by `getFlashRef`.
    */
   const flashElement = useCallback((color: 'green' | 'red', element?: HTMLElement | null) => {
     const target = element || flashElementRef.current;
     if (!target) return;
 
-    // Clear any existing flash
     if (flashTimeoutRef.current) {
       clearTimeout(flashTimeoutRef.current);
     }

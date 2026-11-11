@@ -7,6 +7,7 @@ import { usePaymentMethodsStore } from '@/store/payment-methods-store';
 import { usePosStore } from '@/store/pos-store';
 import { formatMoney } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { saveOfflineSale } from '@/lib/offline/outbox';
 import toast from 'react-hot-toast';
 
 interface PaymentModalProps {
@@ -198,8 +199,52 @@ export default function PaymentModal({
       setSelectedMethodId(null);
       onClose();
     } catch (error: any) {
-      console.error('Sale failed:', error);
-      toast.error(error.message || 'Failed to process sale. Please try again.');
+      console.warn('Online sale processing failed, attempting offline save:', error);
+      try {
+        const { receiptData } = await saveOfflineSale({
+          cart,
+          total,
+          paymentMethod: method.name,
+          cashSessionId,
+          customerId: customer?.id,
+          customerName: customer?.name,
+        });
+
+        recordSale({
+          items: cart.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            line_total: item.line_total,
+          })),
+          subtotal,
+          discount: discount.amount,
+          total,
+          paymentMethodId: method.id,
+          paymentMethodName: `${method.name} (Offline)`,
+          paymentType: method.type,
+          payments: [
+            {
+              methodId: method.id,
+              methodName: method.name,
+              amount: total,
+            },
+          ],
+          customerName: customer?.name || null,
+        });
+
+        completeSale();
+        toast.success(`تم حفظ الفاتورة بنجاح في وضع غير المتصل (أوفلاين) برقم ${receiptData.invoice_number}!`);
+
+        if (onSaleComplete) onSaleComplete();
+        if (onSaleSuccess) onSaleSuccess(receiptData);
+
+        setSelectedMethodId(null);
+        onClose();
+      } catch (offlineErr: any) {
+        console.error('Offline save also failed:', offlineErr);
+        toast.error(error.message || 'Failed to process sale. Please try again.');
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -314,8 +359,60 @@ export default function PaymentModal({
 
       onClose();
     } catch (error: any) {
-      console.error('Split sale failed:', error);
-      toast.error(error.message || 'Failed to process split payment.');
+      console.warn('Online split sale processing failed, attempting offline save:', error);
+      try {
+        const splitPayments = validEntries.map((e) => {
+          const m = methods.find((method) => method.id === e.methodId);
+          return {
+            method: (m?.name?.toLowerCase().includes("card") ? "card" : "cash") as "cash" | "card",
+            amount: parseFloat(e.amount).toFixed(2),
+            reference: e.reference.trim() || undefined,
+          };
+        });
+
+        const { receiptData } = await saveOfflineSale({
+          cart,
+          total,
+          paymentMethod: "Split Payment",
+          payments: splitPayments,
+          cashSessionId,
+          customerId: customer?.id,
+          customerName: customer?.name,
+        });
+
+        recordSale({
+          items: cart.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            line_total: item.line_total,
+          })),
+          subtotal,
+          discount: discount.amount,
+          total,
+          paymentMethodId: 'split',
+          paymentMethodName: 'Split Payment (Offline)',
+          paymentType: 'split',
+          payments: validEntries.map((e) => ({
+            methodId: e.methodId,
+            methodName: methods.find((m) => m.id === e.methodId)?.name || e.methodId,
+            amount: parseFloat(e.amount),
+            reference: e.reference.trim() || undefined,
+          })),
+          customerName: customer?.name || null,
+        });
+
+        completeSale();
+        toast.success(`تم حفظ الدفع المجزأ دون إنترنت (أوفلاين) برقم ${receiptData.invoice_number}!`);
+
+        if (onSaleComplete) onSaleComplete();
+        if (onSaleSuccess) onSaleSuccess(receiptData);
+
+        onClose();
+      } catch (offlineErr: any) {
+        console.error('Split offline save failed:', offlineErr);
+        toast.error(error.message || 'Failed to process split payment.');
+      }
     } finally {
       setIsProcessing(false);
     }

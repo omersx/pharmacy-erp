@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Camera, SwitchCamera, Flashlight, Loader2 } from 'lucide-react';
+import { playScannerBeep, getAudioContext } from '@/components/ui/scan-feedback';
 
 interface BarcodeScannerProps {
   /** Whether the scanner modal is open */
@@ -101,6 +102,7 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = 'Scan Barcode'
           if (hasScannedRef.current) return;
           hasScannedRef.current = true;
 
+          playScannerBeep();
           onScan(decodedText);
         },
         () => {
@@ -124,6 +126,7 @@ export function BarcodeScanner({ isOpen, onClose, onScan, title = 'Scan Barcode'
   // Start scanner when modal opens
   useEffect(() => {
     if (isOpen) {
+      getAudioContext();
       startScanner();
     }
     return () => {

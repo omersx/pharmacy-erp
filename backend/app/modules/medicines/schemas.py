@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, model_validator
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
 from decimal import Decimal
@@ -54,6 +54,18 @@ class MedicineCreate(BaseModel):
     max_stock: int = 0
     image_url: Optional[str] = None
 
+    @model_validator(mode='before')
+    @classmethod
+    def map_aliases(cls, data: Any):
+        if isinstance(data, dict):
+            if 'name' in data and not data.get('name_en'):
+                data['name_en'] = data['name']
+            if 'controlled_substance' in data and 'is_controlled' not in data:
+                data['is_controlled'] = data['controlled_substance']
+            if 'cold_chain' in data and 'is_cold_chain' not in data:
+                data['is_cold_chain'] = data['cold_chain']
+        return data
+
 class MedicineUpdate(BaseModel):
     sku: Optional[str] = None
     name_en: Optional[str] = None
@@ -78,6 +90,18 @@ class MedicineUpdate(BaseModel):
     image_url: Optional[str] = None
     is_active: Optional[bool] = None
 
+    @model_validator(mode='before')
+    @classmethod
+    def map_aliases(cls, data: Any):
+        if isinstance(data, dict):
+            if 'name' in data and not data.get('name_en'):
+                data['name_en'] = data['name']
+            if 'controlled_substance' in data and 'is_controlled' not in data:
+                data['is_controlled'] = data['controlled_substance']
+            if 'cold_chain' in data and 'is_cold_chain' not in data:
+                data['is_cold_chain'] = data['cold_chain']
+        return data
+
 class MedicineResponse(MedicineCreate):
     id: uuid.UUID
     selling_price: Decimal
@@ -88,13 +112,24 @@ class InitialBatch(BaseModel):
     batch_number: Optional[str] = None
     branch_id: Optional[uuid.UUID] = None
     quantity: Decimal
-    purchase_price: Decimal
+    purchase_price: Optional[Decimal] = Decimal('0.0')
     production_date: Optional[datetime] = None
     expiry_date: datetime
     supplier_id: Optional[uuid.UUID] = None
 
 class MedicineCreateWithBatch(MedicineCreate):
     initial_batch: Optional[InitialBatch] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def handle_nested_format(cls, data: Any):
+        if isinstance(data, dict) and 'medicine' in data and isinstance(data['medicine'], dict):
+            flat = dict(data['medicine'])
+            batch = data.get('batch') or data.get('initial_batch')
+            if batch:
+                flat['initial_batch'] = batch
+            return flat
+        return data
 
 class BatchCreate(BaseModel):
     batch_number: str
@@ -127,6 +162,7 @@ class BatchResponse(BaseModel):
     purchase_price: Decimal
     quantity_received: Decimal
     quantity_remaining: Decimal
+    quantity: Optional[Decimal] = None
     received_date: datetime
     is_active: bool
     production_date: Optional[datetime] = None
@@ -134,6 +170,12 @@ class BatchResponse(BaseModel):
     status: Optional[str] = "ACTIVE"
     notes: Optional[str] = None
     model_config = {"from_attributes": True}
+
+    @model_validator(mode='after')
+    def set_quantity(self):
+        if self.quantity is None:
+            self.quantity = self.quantity_remaining
+        return self
 
 class BarcodeCreate(BaseModel):
     barcode: str
@@ -165,6 +207,13 @@ class BarcodeScanResult(BaseModel):
     medicine_sku: str
     selling_price: Decimal
     effective_price: Decimal
+    unit_price: Optional[Decimal] = None
+
+    @model_validator(mode='after')
+    def set_unit_price(self):
+        if self.unit_price is None:
+            self.unit_price = self.effective_price or self.selling_price
+        return self
     units_multiplier: int = 1
     packaging_type: Optional[str] = "UNIT"
     requires_prescription: bool = False
@@ -177,10 +226,13 @@ class BarcodeScanResult(BaseModel):
     notes: Optional[str] = None
 
 class BarcodeCheckResponse(BaseModel):
-    available: bool
+    available: bool = True
+    is_unique: bool = True
     barcode: str
     conflict_message: Optional[str] = None
     assigned_to: Optional[str] = None
+    conflict_type: Optional[str] = None
+    conflict_details: Optional[Dict[str, Any]] = None
 
 class BatchConflictResponse(BaseModel):
     """Returned when a batch number already exists with a different expiry date"""

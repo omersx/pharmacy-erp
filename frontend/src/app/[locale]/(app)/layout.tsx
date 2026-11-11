@@ -3,6 +3,8 @@ import { useAppStore } from '@/store/app-store';
 import { Sidebar } from '@/components/ui/sidebar';
 import { TopBar } from '@/components/ui/topbar';
 import { AuthGuard } from '@/components/auth-guard';
+import { ConnectionBadge } from '@/components/pwa/ConnectionBadge';
+import { InstallButton } from '@/components/pwa/InstallButton';
 import { useEffect, useState } from 'react';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -48,17 +50,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Status Bar */}
           <footer className="h-8 border-t bg-background flex items-center px-4 text-xs text-gray-500 justify-between">
             <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-success"></span>
-                Online
-              </span>
+              <ConnectionBadge />
               <span>Branch: Main Branch</span>
             </div>
-            <div>Version 1.0.0</div>
+            <div className="flex items-center gap-3">
+              <InstallButton />
+              <span>Version 1.3.4</span>
+            </div>
           </footer>
         </div>
       </div>
     </AuthGuard>
   );
 }
-

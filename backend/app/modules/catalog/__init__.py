@@ -1,0 +1,1 @@
+# PWA Catalog module

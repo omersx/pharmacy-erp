@@ -1,6 +1,7 @@
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.modules.medicines.models import MedicineBatch
 from app.modules.sales.models import Sale, SaleItem, SaleReturn, SaleReturnItem, SalePayment
 from app.modules.sales.schemas import SaleCreate, SaleReturnCreate
@@ -10,6 +11,25 @@ from app.core.exceptions import ValidationError
 from typing import Optional
 import uuid
 from datetime import datetime, timezone
+
+def sale_eager_options():
+    return [
+        selectinload(Sale.items).selectinload(SaleItem.medicine),
+        selectinload(Sale.items).selectinload(SaleItem.batch),
+        selectinload(Sale.customer),
+        selectinload(Sale.payments),
+        selectinload(Sale.returns).selectinload(SaleReturn.items).selectinload(SaleReturnItem.medicine),
+        selectinload(Sale.returns).selectinload(SaleReturn.items).selectinload(SaleReturnItem.batch),
+    ]
+
+async def get_sale_by_id(db: AsyncSession, sale_id: uuid.UUID) -> Optional[Sale]:
+    stmt = (
+        select(Sale)
+        .where(Sale.id == sale_id)
+        .options(*sale_eager_options())
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
 
 async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.UUID, cashier_id: uuid.UUID):
     total_amount = Decimal('0.0')
@@ -188,8 +208,7 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
         db.add(mv)
 
     await db.commit()
-    await db.refresh(sale)
-    return sale
+    return await get_sale_by_id(db, sale.id)
 
 async def return_sale(
     db: AsyncSession, 
@@ -386,5 +405,4 @@ async def return_sale(
         sale.status = "PARTIALLY_RETURNED"
 
     await db.commit()
-    await db.refresh(sale)
-    return sale
+    return await get_sale_by_id(db, sale.id)

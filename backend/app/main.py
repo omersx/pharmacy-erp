@@ -16,6 +16,8 @@ from app.modules.cash_sessions.models import CashSession, CashMovement
 from app.modules.roles.models import Role, Permission
 from app.modules.admin.models import AuditLog
 from app.modules.notifications.models import Notification
+from app.modules.devices.models import Device
+from app.modules.sync.models import SyncReceipt
 
 from app.modules.auth.router import router as auth_router
 from app.modules.organizations.router import router as org_router
@@ -30,6 +32,9 @@ from app.modules.users.router import router as users_router
 from app.modules.roles.router import router as roles_router
 from app.modules.admin.router import router as admin_router
 from app.modules.notifications.router import router as notifications_router
+from app.modules.catalog.router import router as catalog_router
+from app.modules.devices.router import router as devices_router
+from app.modules.sync.router import router as sync_router
 
 app = FastAPI(title=settings.APP_NAME, redirect_slashes=False)
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
@@ -48,6 +53,21 @@ app.include_router(users_router, prefix="/api/v1/users")
 app.include_router(roles_router, prefix="/api/v1/roles")
 app.include_router(admin_router, prefix="/api/v1/admin")
 app.include_router(notifications_router, prefix="/api/v1/notifications")
+app.include_router(catalog_router, prefix="/api/v1/catalog")
+app.include_router(devices_router, prefix="/api/v1")
+app.include_router(sync_router, prefix="/api/v1/sync")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+@app.get("/api/v1/health/live")
+async def health_live():
+    return {"status": "ok", "live": True}
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "app": settings.APP_NAME}
 
 @app.on_event("startup")
 async def startup():

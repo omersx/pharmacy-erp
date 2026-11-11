@@ -173,6 +173,7 @@ export default function ProductsPage() {
       
       const payload: any = {
         name: formData.name,
+        name_en: formData.name,
         name_ar: formData.name_ar,
         sku: formData.sku,
         barcode: formData.barcode,
@@ -183,13 +184,15 @@ export default function ProductsPage() {
         strength: formData.strength,
         manufacturer: formData.manufacturer,
         description: formData.description,
-        selling_price: Number(formData.selling_price),
-        base_unit: formData.base_unit,
-        units_per_pack: Number(formData.units_per_pack),
-        reorder_level: Number(formData.reorder_level),
-        max_stock: Number(formData.max_stock),
+        selling_price: Number(formData.selling_price || 0),
+        base_unit: formData.base_unit || 'Piece',
+        units_per_pack: Number(formData.units_per_pack || 1),
+        reorder_level: Number(formData.reorder_level || 10),
+        max_stock: Number(formData.max_stock || 0),
         requires_prescription: formData.requires_prescription,
+        is_controlled: formData.controlled_substance,
         controlled_substance: formData.controlled_substance,
+        is_cold_chain: formData.cold_chain,
         cold_chain: formData.cold_chain,
         allow_loose_sale: formData.allow_loose_sale,
         is_active: true
@@ -200,17 +203,22 @@ export default function ProductsPage() {
         toast.success('Product updated');
       } else {
         if (formData.has_initial_batch) {
-          if (!formData.batch_quantity || !formData.purchase_price || !formData.expiry_date) {
-            toast.error('Please fill required batch fields');
+          if (!formData.batch_quantity) {
+            toast.error('Please enter the initial batch quantity');
+            setIsSaving(false);
+            return;
+          }
+          if (!formData.expiry_date) {
+            toast.error('Please enter the Expiry Date for this batch');
             setIsSaving(false);
             return;
           }
           await api.createMedicineWithBatch({
-            medicine: payload,
-            batch: {
+            ...payload,
+            initial_batch: {
               batch_number: formData.batch_number,
               quantity: Number(formData.batch_quantity),
-              purchase_price: Number(formData.purchase_price),
+              purchase_price: Number(formData.purchase_price || 0),
               production_date: formData.production_date || null,
               expiry_date: formData.expiry_date,
               supplier_id: formData.supplier_id || null
@@ -664,9 +672,10 @@ export default function ProductsPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm text-muted-foreground">Purchase Price ({currency}) *</label>
+                    <label className="text-sm text-muted-foreground">Purchase Price ({currency})</label>
                     <input 
                       type="number" step="0.01" min="0"
+                      placeholder="0.00 (optional if unknown)"
                       value={formData.purchase_price} onChange={e => setFormData({...formData, purchase_price: e.target.value})}
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
@@ -772,11 +781,14 @@ export default function ProductsPage() {
           setScannerOpen(false);
           try {
             const check = await api.checkBarcode(code, editingId ? 'medicine' : undefined, editingId || undefined);
-            if (!check.is_unique) {
+            const isUnique = check.is_unique ?? (check as any).available ?? true;
+            if (!isUnique) {
               playError();
-              let msg = 'Barcode already in use';
+              let msg = (check as any).conflict_message || 'Barcode already in use';
               if (check.conflict_details?.medicine_name) {
                 msg = `Barcode in use by: ${check.conflict_details.medicine_name}`;
+              } else if ((check as any).assigned_to) {
+                msg = `Barcode in use by: ${(check as any).assigned_to}`;
               }
               toast.error(msg);
               return;

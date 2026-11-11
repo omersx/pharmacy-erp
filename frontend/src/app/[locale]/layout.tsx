@@ -3,7 +3,7 @@ import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 import { Toaster } from 'react-hot-toast';
-import { ServiceWorkerCleaner } from '@/components/sw-cleaner';
+import { PwaProvider } from '@/components/pwa/PwaProvider';
 
 export default async function LocaleLayout({
   children,
@@ -22,7 +22,7 @@ export default async function LocaleLayout({
 
   return (
     <div dir={dir} className="min-h-screen bg-background">
-      <ServiceWorkerCleaner />
+      <PwaProvider />
       <NextIntlClientProvider messages={messages} locale={locale}>
         {children}
         <Toaster position="top-center" />

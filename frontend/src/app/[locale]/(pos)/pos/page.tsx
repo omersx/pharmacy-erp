@@ -15,7 +15,16 @@ import { CashMovementModal } from '@/components/pos/CashMovementModal';
 import { SaleReceipt } from '@/components/pos/SaleReceipt';
 import { BarcodeScanner } from '@/components/ui/barcode-scanner';
 import { useScanFeedback } from '@/components/ui/scan-feedback';
-import { useBarcodeScanner } from '@/hooks/use-barcode-scanner';
+import { useBarcodeScanner, type BarcodeKeyDebug } from '@/hooks/use-barcode-scanner';
+import { ScannerDiagnosticsModal } from '@/components/pos/ScannerDiagnosticsModal';
+import { ConnectionBadge, PendingSyncBadge, WakeLockButton, TerminalDiagnosticsModal } from '@/components/pwa';
+import { CatalogStaleBanner } from '@/components/pos/CatalogStaleBanner';
+import { LockScreen } from '@/components/pos/LockScreen';
+import { SetPinModal } from '@/components/pos/SetPinModal';
+import { useIdleLock } from '@/hooks/use-idle-lock';
+import { db } from '@/lib/offline/db';
+import { syncCatalog } from '@/lib/offline/catalog-sync';
+import { initAutoSync } from '@/lib/offline/sync';
 import type { Product } from '@/components/pos/ProductCatalog';
 import {
   Menu,
@@ -31,6 +40,9 @@ import {
   LogOut,
   Calculator,
   ArrowDownCircle,
+  Lock,
+  KeyRound,
+  Activity,
 } from 'lucide-react';
 import { useRouter } from '@/i18n/routing';
 import toast from 'react-hot-toast';
@@ -51,6 +63,15 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
   const [closeSessionOpen, setCloseSessionOpen] = useState(false);
   const [cashMovementOpen, setCashMovementOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [terminalDiagnosticsOpen, setTerminalDiagnosticsOpen] = useState(false);
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+
+  // Terminal screen auto-lock (5 min inactivity)
+  const { isLocked, lock, unlock } = useIdleLock({
+    timeoutMinutes: 5,
+    lockOnVisibilityHidden: false,
+    enabled: true,
+  });
   const [mobileTab, setMobileTab] = useState<'cart' | 'products'>('products');
   
   // Receipt State
@@ -59,6 +80,14 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
 
   // Camera Scanner State
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
+
+  // Hardware Scanner State & Diagnostics
+  const [isScanning, setIsScanning] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [lastDebugEvent, setLastDebugEvent] = useState<BarcodeKeyDebug | null>(null);
+  const [lastScannedCode, setLastScannedCode] = useState<string>('');
+  const lastScanRef = useRef<{ code: string; time: number }>({ code: '', time: 0 });
+  const inputScanTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -111,26 +140,94 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
         lot_number: '-',
         expiry: '-',
         requires_prescription: med.requires_prescription || false,
-        favorite: false
+        favorite: false,
+        barcode: med.barcode || '',
+        sku: med.sku || ''
       }));
       
       const catSet = new Set<string>(['All']);
       realProducts.forEach(p => catSet.add(p.category));
       
-      setProducts(realProducts);
-      setCategories(Array.from(catSet));
+      if (realProducts.length > 0) {
+        setProducts(realProducts);
+        setCategories(Array.from(catSet));
+        // Keep local offline DB in sync
+        syncCatalog((session as any)?.branch_id).catch(() => {});
+      } else {
+        // Fallback to offline catalog from IndexedDB
+        const offlineMeds = await db.medicines.toArray();
+        if (offlineMeds.length > 0) {
+          const offlineProducts: Product[] = offlineMeds.map((m) => ({
+            id: m.id,
+            medicine_id: m.id,
+            name: m.nameEn || m.nameAr || 'Unknown',
+            category: 'Offline Catalog',
+            price: Number(m.price) || 0,
+            stock: 999,
+            batch: '-',
+            lot_number: '-',
+            expiry: '-',
+            requires_prescription: m.requiresRx || false,
+            favorite: false,
+            barcode: m.barcode || '',
+            sku: m.id,
+          }));
+          setProducts(offlineProducts);
+          setCategories(['All', 'Offline Catalog']);
+        } else {
+          setProducts([]);
+          setCategories(['All']);
+        }
+      }
     } catch (error) {
-      console.error('Failed to fetch POS data', error);
+      console.error('Failed to fetch POS data, attempting offline fallback', error);
+      try {
+        const offlineMeds = await db.medicines.toArray();
+        if (offlineMeds.length > 0) {
+          const offlineProducts: Product[] = offlineMeds.map((m) => ({
+            id: m.id,
+            medicine_id: m.id,
+            name: m.nameEn || m.nameAr || 'Unknown',
+            category: 'Offline Catalog',
+            price: Number(m.price) || 0,
+            stock: 999,
+            batch: '-',
+            lot_number: '-',
+            expiry: '-',
+            requires_prescription: m.requiresRx || false,
+            favorite: false,
+            barcode: m.barcode || '',
+            sku: m.id,
+          }));
+          setProducts(offlineProducts);
+          setCategories(['All', 'Offline Catalog']);
+          return;
+        }
+      } catch {}
       setProducts([]);
       setCategories(['All']);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     fetchPosData();
   }, [fetchPosData]);
+
+  // Auto-focus barcode search on load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Background auto-sync for offline sales
+  useEffect(() => {
+    const cleanup = initAutoSync();
+    return () => cleanup();
+  }, []);
 
   // Store
   const addItem = usePosStore((s) => s.addItem);
@@ -167,11 +264,20 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
   // Scan feedback (beep sounds + visual flash)
   const { playSuccess, playError, flashElement } = useScanFeedback();
 
-  // Shared barcode scan handler (used by both USB scanner and camera scanner)
+  // Shared barcode scan handler (used by USB/Bluetooth scanner, manual search Enter, and camera scanner)
   const handleBarcodeScan = useCallback(
     async (scannedCode: string) => {
       const code = scannedCode.trim();
       if (!code) return;
+
+      // Prevent duplicate scan triggers within 400ms
+      const now = Date.now();
+      if (lastScanRef.current.code === code && now - lastScanRef.current.time < 400) {
+        return;
+      }
+      lastScanRef.current = { code, time: now };
+
+      setIsScanning(true);
 
       try {
         // 1. Unified Barcode Lookup (Primary, Alternate, Packaging, Batch)
@@ -182,7 +288,20 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
           if (!scanRes.is_sellable) {
             playError();
             flashElement('red', searchInputRef.current);
-            toast.error(scanRes.sellable_status_reason || `${scanRes.medicine_name} cannot be sold`);
+            toast.error(
+              (t) => (
+                <div className="flex flex-col gap-0.5 text-left">
+                  <span className="font-semibold text-sm">⚠️ Cannot Sell Product</span>
+                  <span className="text-xs text-muted-foreground">
+                    {scanRes.sellable_status_reason || `${scanRes.medicine_name} is not available for sale.`}
+                  </span>
+                </div>
+              ),
+              { id: `sell-error-${code}` }
+            );
+            setSearch('');
+            setShowDropdown(false);
+            searchInputRef.current?.focus();
             return;
           }
 
@@ -192,13 +311,20 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
               ? `${scanRes.medicine_name} (${scanRes.packaging_type} x${qtyToAdd})`
               : scanRes.medicine_name;
 
+          const resolvedPrice = Number(
+            scanRes.effective_price ?? 
+            scanRes.selling_price ?? 
+            scanRes.unit_price ?? 
+            0
+          );
+
           addItem({
             medicine_id: scanRes.medicine_id,
             name: displayName,
             batch: scanRes.batch_number || '-',
             lot_number: scanRes.batch_number || '-',
             quantity: qtyToAdd,
-            unit_price: scanRes.unit_price,
+            unit_price: resolvedPrice,
           });
 
           playSuccess();
@@ -210,34 +336,99 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
           } else if (scanRes.match_type === 'BATCH' && scanRes.batch_number) {
             successMsg += ` [Batch: ${scanRes.batch_number}]`;
           }
-          toast.success(successMsg);
+          toast.success(successMsg, { id: `scan-success-${code}` });
           setSearch('');
           setShowDropdown(false);
+          searchInputRef.current?.focus();
           return;
         }
       } catch (scanErr: any) {
         // Fall through to local fallback lookup if scan resolution threw
+      } finally {
+        setIsScanning(false);
       }
 
-      // 2. Fallback: Local search by product ID or exact name
+      // 2. Fallback: Local search by product ID, barcode (exact/suffix), SKU, or exact name
+      const clean = code.toLowerCase();
       const found = products.find(
-        (p) =>
-          p.id === code ||
-          p.name.toLowerCase() === code.toLowerCase()
+        (p: any) => {
+          const pBar = (p.barcode || '').toLowerCase();
+          const pSku = (p.sku || '').toLowerCase();
+          const pName = (p.name || '').toLowerCase();
+          return (
+            p.id === code ||
+            pBar === clean ||
+            (clean.length >= 6 && pBar.endsWith(clean)) ||
+            (pBar.length >= 6 && clean.endsWith(pBar)) ||
+            pSku === clean ||
+            (clean.length >= 6 && pSku.endsWith(clean)) ||
+            pName === clean
+          );
+        }
       );
 
       if (found) {
         handleProductClick(found);
         playSuccess();
         flashElement('green', searchInputRef.current);
-        toast.success(`✅ Scanned: ${found.name}`);
+        toast.success(`✅ Scanned: ${found.name}`, { id: `scan-success-${code}` });
+        setSearch('');
+        setShowDropdown(false);
+        searchInputRef.current?.focus();
         return;
       }
 
-      // If neither resolved
+      // 2b. Fallback: Lookup in Dexie IndexedDB offline catalog
+      try {
+        const offlineMatch =
+          (await db.medicines.where('barcode').equals(code).first()) ||
+          (await db.medicines.get(code));
+
+        if (offlineMatch) {
+          addItem({
+            medicine_id: offlineMatch.id,
+            name: offlineMatch.nameEn || offlineMatch.nameAr,
+            batch: '-',
+            lot_number: '-',
+            quantity: 1,
+            unit_price: Number(offlineMatch.price) || 0,
+          });
+          playSuccess();
+          flashElement('green', searchInputRef.current);
+          toast.success(`✅ Scanned (Offline): ${offlineMatch.nameEn || offlineMatch.nameAr}`, {
+            id: `scan-success-${code}`,
+          });
+          setSearch('');
+          setShowDropdown(false);
+          searchInputRef.current?.focus();
+          return;
+        }
+      } catch (offlineErr) {
+        console.warn('Offline barcode lookup error', offlineErr);
+      }
+
+      // 3. Clear Invalid Barcode Feedback
       playError();
       flashElement('red', searchInputRef.current);
-      toast.error(`Barcode not recognized: ${code}`);
+      toast.error(
+        (t) => (
+          <div className="flex flex-col gap-1 text-left">
+            <span className="font-bold text-sm text-red-500 flex items-center gap-1.5">
+              <span>❌ Invalid Barcode</span>
+            </span>
+            <span className="text-xs text-foreground/80">
+              No product or batch found matching barcode:
+            </span>
+            <span className="font-mono font-bold text-xs bg-red-500/10 text-red-600 dark:text-red-400 px-2 py-0.5 rounded border border-red-500/20 inline-block w-fit">
+              {code}
+            </span>
+          </div>
+        ),
+        { duration: 4500, id: `barcode-invalid-${code}` }
+      );
+      setSearch('');
+      setShowDropdown(false);
+      searchInputRef.current?.focus();
     },
     [session, products, handleProductClick, addItem, playSuccess, playError, flashElement]
   );
@@ -246,6 +437,7 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
   useBarcodeScanner({
     onScan: handleBarcodeScan,
     enabled: !paymentMode && !cameraScannerOpen,
+    onKeyDebug: setLastDebugEvent,
   });
 
   // Camera scanner callback
@@ -344,17 +536,76 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
         </div>
 
         <div className="flex items-center gap-1.5 md:gap-3 flex-1 md:flex-none justify-end">
+          {/* Connection Status Badge & Pending Sync Count */}
+          <div className="hidden sm:flex items-center gap-1.5">
+            <WakeLockButton />
+            <PendingSyncBadge />
+            <ConnectionBadge />
+          </div>
+
+          {/* Live Scanner Status Badge - Click to open Diagnostics & Test */}
+          <div
+            onClick={() => setDiagnosticsOpen(true)}
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer select-none transition-all border ${
+              isScanning
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-500'
+                : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+            }`}
+            title="Bluetooth & USB Scanner Live - Click to open live diagnostics & test"
+          >
+            <span className="relative flex h-2 w-2">
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  isScanning ? 'bg-amber-400' : 'bg-emerald-400'
+                }`}
+              ></span>
+              <span
+                className={`relative inline-flex rounded-full h-2 w-2 ${
+                  isScanning ? 'bg-amber-500' : 'bg-emerald-500'
+                }`}
+              ></span>
+            </span>
+            <ScanBarcode size={13} className="shrink-0" />
+            <span>{isScanning ? 'Scanning...' : 'Scanner Live'}</span>
+          </div>
+
           <div className="relative flex-1 max-w-[400px] md:w-[260px]">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" />
             <input
               ref={searchInputRef}
+              data-barcode-input="true"
               type="text"
               value={search}
               onChange={(e) => {
-                setSearch(e.target.value);
+                const val = e.target.value;
+                setSearch(val);
                 setShowDropdown(true);
+
+                // Fast scanner input detection (6-18 digits)
+                const clean = val.trim();
+                if (/^\d{6,18}$/.test(clean)) {
+                  if (inputScanTimerRef.current) clearTimeout(inputScanTimerRef.current);
+                  inputScanTimerRef.current = setTimeout(() => {
+                    handleBarcodeScan(clean);
+                  }, 180);
+                }
+              }}
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData('text').trim();
+                if (pasted.length >= 3) {
+                  setTimeout(() => handleBarcodeScan(pasted), 50);
+                }
               }}
               onFocus={() => setShowDropdown(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const val = search.trim();
+                  if (val) {
+                    handleBarcodeScan(val);
+                  }
+                }
+              }}
               placeholder="Search / Scan barcode... (F2)"
               className="w-full bg-surface border border-border text-foreground rounded-lg py-2 pl-9 pr-3 text-sm focus:outline-none focus:border-pos-400 focus:ring-1 focus:ring-pos-200 placeholder:text-foreground/40 transition-shadow"
             />
@@ -402,11 +653,19 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
           </button>
 
           <button 
-            onClick={() => searchInputRef.current?.focus()}
-            className="p-1.5 md:p-2 bg-transparent border border-border rounded-lg text-foreground hover:bg-surface transition-colors shrink-0"
-            title="Focus Barcode Search (F2)"
+            onClick={() => setDiagnosticsOpen(true)}
+            className="p-1.5 md:p-2 bg-transparent border border-border rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-surface transition-colors shrink-0"
+            title="Bluetooth & USB Scanner Diagnostics"
           >
             <ScanBarcode size={18} className="md:w-5 md:h-5" />
+          </button>
+
+          <button 
+            onClick={() => setTerminalDiagnosticsOpen(true)}
+            className="p-1.5 md:p-2 bg-transparent border border-border rounded-lg text-pos-600 dark:text-pos-400 hover:bg-surface transition-colors shrink-0"
+            title="Terminal & PWA Offline Diagnostics"
+          >
+            <Activity size={18} className="md:w-5 md:h-5" />
           </button>
 
           {/* User Menu & Close Register */}
@@ -449,8 +708,40 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
                       <Calculator size={16} />
                       Close Register
                     </button>
+                    <div className="border-t border-border my-1" />
                   </>
                 ) : null}
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    lock();
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-amber-600 dark:text-amber-400 hover:bg-background flex items-center gap-2 font-medium transition-colors"
+                >
+                  <Lock size={16} />
+                  Lock Terminal
+                </button>
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    setPinModalOpen(true);
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-background flex items-center gap-2 transition-colors"
+                >
+                  <KeyRound size={16} />
+                  Terminal Quick PIN
+                </button>
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    setTerminalDiagnosticsOpen(true);
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-background flex items-center gap-2 transition-colors"
+                >
+                  <Activity size={16} />
+                  PWA Diagnostics
+                </button>
+                <div className="border-t border-border my-1" />
                 <button
                   onClick={() => {
                     setUserMenuOpen(false);
@@ -466,6 +757,9 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
           </div>
         </div>
       </header>
+
+      {/* ===== CATALOG STALE WARNING BANNER ===== */}
+      <CatalogStaleBanner branchId={(session as any)?.branch_id} onSynced={fetchPosData} />
 
       {/* ===== MAIN CONTENT ===== */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden h-full">
@@ -539,6 +833,15 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
         title="Scan Product Barcode"
       />
 
+      {/* Hardware / Bluetooth Scanner Diagnostics Modal */}
+      <ScannerDiagnosticsModal
+        isOpen={diagnosticsOpen}
+        onClose={() => setDiagnosticsOpen(false)}
+        onTestScan={handleBarcodeScan}
+        lastScannedCode={lastScannedCode}
+        lastDebugEvent={lastDebugEvent}
+      />
+
       {/* ===== CASH IN / OUT MODAL ===== */}
       {session?.id && (
         <CashMovementModal
@@ -558,6 +861,19 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
           setCloseSessionOpen(false);
           window.location.reload();
         }}
+      />
+
+      {/* ===== TERMINAL LOCK SCREEN ===== */}
+      <LockScreen isLocked={isLocked} onUnlock={unlock} />
+
+      {/* ===== TERMINAL PIN MODAL ===== */}
+      <SetPinModal open={pinModalOpen} onClose={() => setPinModalOpen(false)} />
+
+      {/* ===== TERMINAL DIAGNOSTICS MODAL ===== */}
+      <TerminalDiagnosticsModal
+        open={terminalDiagnosticsOpen}
+        onClose={() => setTerminalDiagnosticsOpen(false)}
+        branchId={(session as any)?.branch_id}
       />
     </div>
   );
