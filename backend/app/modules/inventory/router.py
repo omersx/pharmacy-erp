@@ -32,7 +32,7 @@ from app.modules.inventory.schemas import (
 from app.modules.inventory.location_service import (
     get_or_create_default_locations, transfer_stock_between_locations
 )
-from app.modules.medicines.models import Medicine, MedicineBatch
+from app.modules.medicines.models import Medicine, MedicineBatch, MedicineBarcode
 from app.modules.organizations.models import Branch
 
 router = APIRouter(tags=["inventory"])
@@ -1054,6 +1054,9 @@ async def restore_inventory_stock(
     col_indices = {}
     for idx, h in enumerate(header_row):
         hl = h.lower().strip()
+        # Valuation columns (Shelf Valuation, Warehouse Valuation, Total Valuation) must NOT be mapped to stock quantity
+        if "valuation" in hl or "قيمة" in hl:
+            continue
         if "barcode" in hl or "باركود" in hl:
             col_indices["barcode"] = idx
         elif "sku" in hl or ("كود" in hl and "بار" not in hl):
@@ -1069,6 +1072,17 @@ async def restore_inventory_stock(
             col_indices["reorder_level"] = idx
         elif ("selling" in hl and "price" in hl) or "سعر البيع" in hl:
             col_indices["selling_price"] = idx
+        elif "arabic" in hl or "بالعربية" in hl or "name_ar" in hl:
+            col_indices["name_ar"] = idx
+        elif "medicine name" in hl or "اسم الدواء" in hl or "name_en" in hl or hl == "name" or hl == "name_en *":
+            if "name_en" not in col_indices:
+                col_indices["name_en"] = idx
+        elif "dosage" in hl or "شكل" in hl:
+            col_indices["dosage_form"] = idx
+        elif "strength" in hl or "عيار" in hl:
+            col_indices["strength"] = idx
+        elif "unit" in hl or "وحدة" in hl:
+            col_indices["base_unit"] = idx
 
     if "sku" not in col_indices and "barcode" not in col_indices:
         raise HTTPException(status_code=400, detail="File must contain an 'SKU' or 'Barcode' column to identify medicines")
@@ -1145,13 +1159,67 @@ async def restore_inventory_stock(
             med = barcode_map.get(barcode_val)
 
         if not med:
-            skipped.append({
-                "row": row_idx,
-                "sku": sku_val,
-                "barcode": barcode_val,
-                "reason": "Medicine not found in catalog"
-            })
-            continue
+            # If database has zero medicines or this medicine does not exist yet,
+            # create it on the fly from the Excel row so it works seamlessly on an empty database!
+            name_val = ""
+            if "name_en" in col_indices and col_indices["name_en"] < len(r) and r[col_indices["name_en"]]:
+                name_val = str(r[col_indices["name_en"]]).strip()
+
+            if not name_val and (sku_val or barcode_val):
+                name_val = f"Medicine {sku_val or barcode_val}"
+
+            if name_val:
+                name_ar_val = None
+                if "name_ar" in col_indices and col_indices["name_ar"] < len(r) and r[col_indices["name_ar"]]:
+                    name_ar_val = str(r[col_indices["name_ar"]]).strip()
+
+                dosage_val = "tablet"
+                if "dosage_form" in col_indices and col_indices["dosage_form"] < len(r) and r[col_indices["dosage_form"]]:
+                    dosage_val = str(r[col_indices["dosage_form"]]).strip().lower()
+
+                strength_val = None
+                if "strength" in col_indices and col_indices["strength"] < len(r) and r[col_indices["strength"]]:
+                    strength_val = str(r[col_indices["strength"]]).strip()
+
+                unit_val = "Unit"
+                if "base_unit" in col_indices and col_indices["base_unit"] < len(r) and r[col_indices["base_unit"]]:
+                    unit_val = str(r[col_indices["base_unit"]]).strip()
+
+                price_val = 0.0
+                if "selling_price" in col_indices and col_indices["selling_price"] < len(r):
+                    price_val = parse_num(r[col_indices["selling_price"]], 0.0)
+
+                reorder_val = 10
+                if "reorder_level" in col_indices and col_indices["reorder_level"] < len(r):
+                    reorder_val = int(parse_num(r[col_indices["reorder_level"]], 10))
+
+                med = Medicine(
+                    name_en=name_val,
+                    name_ar=name_ar_val,
+                    sku=sku_val or None,
+                    barcode=barcode_val or None,
+                    dosage_form=dosage_val,
+                    strength=strength_val,
+                    base_unit=unit_val,
+                    selling_price=Decimal(str(price_val)),
+                    reorder_level=reorder_val,
+                    is_active=True
+                )
+                db.add(med)
+                await db.flush()
+                if med.sku:
+                    sku_map[med.sku.upper()] = med
+                if med.barcode:
+                    barcode_map[med.barcode] = med
+                    db.add(MedicineBarcode(medicine_id=med.id, barcode=med.barcode, is_active=True))
+            else:
+                skipped.append({
+                    "row": row_idx,
+                    "sku": sku_val,
+                    "barcode": barcode_val,
+                    "reason": "Medicine not found in catalog and no name provided"
+                })
+                continue
 
         target_shelf = 0.0
         target_wh = 0.0
