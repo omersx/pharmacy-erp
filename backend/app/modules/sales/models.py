@@ -1,9 +1,11 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.orm.base import NO_VALUE
-from sqlalchemy import String, Numeric, ForeignKey, DateTime, inspect
+from sqlalchemy import String, Numeric, ForeignKey, DateTime, Boolean, inspect
 from app.core.database import Base
+from app.modules.customers.models import Customer
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 class Sale(Base):
     __tablename__ = "sales"
@@ -20,6 +22,9 @@ class Sale(Base):
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2))
     payment_method: Mapped[str] = mapped_column(String)
     notes: Mapped[str] = mapped_column(String, nullable=True)
+    is_invoiced: Mapped[bool] = mapped_column(Boolean, default=False)
+    invoice_status: Mapped[str] = mapped_column(String, default="NOT_INVOICED")  # NOT_INVOICED, FULLY_INVOICED
+    customer_invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("customer_invoices.id", use_alter=True), nullable=True)
     
     items = relationship("SaleItem", back_populates="sale", lazy="selectin")
     customer = relationship("Customer", lazy="selectin")

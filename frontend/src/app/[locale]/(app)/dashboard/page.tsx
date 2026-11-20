@@ -59,7 +59,9 @@ export default function DashboardPage() {
         setRecentSales(recentArray.slice(0, 5));
 
         // Build weekly chart data
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayNames = locale === 'ar'
+          ? ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+          : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const weekData = dayNames.map((name, i) => {
           const dayDate = new Date(startOfWeek);
           dayDate.setDate(startOfWeek.getDate() + i);
@@ -85,8 +87,8 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-gray-500">Welcome back. Here is what's happening today.</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('dashboard.title')}</h1>
+          <p className="text-gray-500">{t('dashboard.welcomeSubtitle')}</p>
         </div>
       </div>
 
@@ -102,25 +104,25 @@ export default function DashboardPage() {
           icon={<TrendingUp size={20} />}
         />
         <StatCard 
-          title="Out of Stock"
-          value={`${stats.outOfStock} Items`}
+          title={t('dashboard.outOfStock')}
+          value={t('dashboard.itemsCount', { count: stats.outOfStock })}
           icon={<Package size={20} className="text-danger" />}
         />
         <StatCard 
           title={t('dashboard.lowStock')}
-          value={`${stats.lowStock} Items`}
+          value={t('dashboard.itemsCount', { count: stats.lowStock })}
           icon={<AlertTriangle size={20} className="text-warning" />}
         />
         <StatCard 
           title={t('dashboard.expiringMedicines')}
-          value={`${stats.expiring} Items`}
+          value={t('dashboard.itemsCount', { count: stats.expiring })}
           icon={<AlertTriangle size={20} className="text-danger" />}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="col-span-1 lg:col-span-2 p-4 md:p-6">
-          <h3 className="font-semibold text-lg mb-4">Sales Overview</h3>
+          <h3 className="font-semibold text-lg mb-4">{t('dashboard.salesOverview')}</h3>
           <div className="h-64 md:h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -138,7 +140,7 @@ export default function DashboardPage() {
                   itemStyle={{ color: 'var(--brand-primary)' }}
                   formatter={(value: number) => formatMoney(value, currency)}
                 />
-                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="var(--brand-primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorSales)" />
+                <Area type="monotone" dataKey="revenue" name={t('dashboard.revenue')} stroke="var(--brand-primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorSales)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -152,19 +154,19 @@ export default function DashboardPage() {
                 <div key={sale.id} className="flex justify-between items-center p-3 hover:bg-surface rounded-lg transition-colors border border-transparent hover:border-border">
                   <div>
                     <div className="font-medium text-sm">{sale.invoice_number || sale.id.substring(0, 8)}</div>
-                    <div className="text-xs text-gray-500">{sale.customer?.name || 'Walk-in Customer'}</div>
+                    <div className="text-xs text-gray-500">{sale.customer?.name || t('pos.walkIn')}</div>
                   </div>
                   <div className="text-right">
                     <div className="font-medium text-sm">{formatMoney(sale.total_amount || 0, currency)}</div>
-                    <div className="text-xs text-success">Completed</div>
+                    <div className="text-xs text-success">{t('common.completed')}</div>
                   </div>
                 </div>
               ))
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
                 <CreditCard size={32} className="text-foreground/20 mb-2" />
-                <p className="text-sm text-foreground/40">No recent transactions</p>
-                <p className="text-xs text-foreground/30 mt-1">Sales will appear here once processed</p>
+                <p className="text-sm text-foreground/40">{t('dashboard.noRecentTransactions')}</p>
+                <p className="text-xs text-foreground/30 mt-1">{t('dashboard.salesAppearHere')}</p>
               </div>
             )}
           </div>

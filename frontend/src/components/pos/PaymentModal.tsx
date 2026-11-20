@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Settings, Check, Loader2, Split, Plus, Trash2 } from 'lucide-react';
+import { X, Settings, Check, Loader2, Split, Plus, Trash2, FileText } from 'lucide-react';
 import { useAppStore } from '@/store/app-store';
 import { usePaymentMethodsStore } from '@/store/payment-methods-store';
 import { usePosStore } from '@/store/pos-store';
@@ -41,6 +41,7 @@ export default function PaymentModal({
   const [paymentMode, setPaymentMode] = useState<'single' | 'split'>('single');
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [invoiceRequested, setInvoiceRequested] = useState(false);
 
   const enabledMethods = methods.filter((m) => m.enabled);
 
@@ -132,6 +133,7 @@ export default function PaymentModal({
           unit_price: Number(item.unit_price) || 0,
         })),
         customer_id: customer?.id || null,
+        is_invoiced: invoiceRequested,
       };
 
       if (cashSessionId && typeof cashSessionId === 'string' && cashSessionId.trim().length > 0) {
@@ -143,6 +145,8 @@ export default function PaymentModal({
       const receiptData = {
         invoice_number: res?.invoice_number || `INV-${Date.now().toString().slice(-8).toUpperCase()}`,
         created_at: res?.created_at || new Date().toISOString(),
+        is_invoiced: invoiceRequested || Boolean(res?.is_invoiced),
+        customer_invoice_id: res?.customer_invoice_id,
         items: cart.map((item) => ({
           medicine_id: item.medicine_id,
           name: item.name,
@@ -290,6 +294,7 @@ export default function PaymentModal({
           unit_price: Number(item.unit_price) || 0,
         })),
         customer_id: customer?.id || null,
+        is_invoiced: invoiceRequested,
       };
 
       if (cashSessionId && typeof cashSessionId === 'string' && cashSessionId.trim().length > 0) {
@@ -311,6 +316,8 @@ export default function PaymentModal({
       const receiptData = {
         invoice_number: res?.invoice_number || `INV-${Date.now().toString().slice(-8).toUpperCase()}`,
         created_at: res?.created_at || new Date().toISOString(),
+        is_invoiced: invoiceRequested || Boolean(res?.is_invoiced),
+        customer_invoice_id: res?.customer_invoice_id,
         items: cart.map((item) => ({
           medicine_id: item.medicine_id,
           name: item.name,
@@ -487,13 +494,38 @@ export default function PaymentModal({
         </div>
 
         {/* Total Banner */}
-        <div className="px-6 pb-3 pt-1">
+        <div className="px-6 pb-2 pt-1">
           <p className="text-xs text-foreground/40 text-center uppercase tracking-wider mb-0.5">
             Total Due
           </p>
           <div className="text-3xl font-black text-foreground text-center">
             {formatMoney(total, currency)}
           </div>
+        </div>
+
+        {/* Invoice Toggle Button (Odoo POS Parity) */}
+        <div className="px-6 pb-3">
+          <button
+            type="button"
+            onClick={() => setInvoiceRequested(!invoiceRequested)}
+            className={`w-full py-2 px-3 rounded-lg border text-xs font-medium flex items-center justify-between transition-colors ${
+              invoiceRequested
+                ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold'
+                : 'bg-surface border-border text-foreground/70 hover:text-foreground'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <FileText size={15} className={invoiceRequested ? 'text-purple-500' : 'text-foreground/40'} />
+              <span>Issue Official A4 Invoice (فاتورة ضريبية رسمية)</span>
+            </div>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full ${
+                invoiceRequested ? 'bg-purple-600 text-white font-bold' : 'bg-black/5 dark:bg-white/5 text-foreground/60'
+              }`}
+            >
+              {invoiceRequested ? 'Invoice Requested ✓' : 'Receipt Only'}
+            </span>
+          </button>
         </div>
 
         {/* SINGLE PAYMENT MODE */}

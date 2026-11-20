@@ -2,6 +2,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, Boolean, Numeric, ForeignKey, Enum as SAEnum
 from app.core.database import Base
 import enum
+import uuid
+from typing import Optional
 
 
 class Customer(Base):
@@ -27,11 +29,11 @@ class PaymentMethod(str, enum.Enum):
 
 class CustomerPayment(Base):
     __tablename__ = "customer_payments"
-    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), index=True)
+    customer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("customers.id"), index=True)
     amount: Mapped[float] = mapped_column(Numeric(10, 2))
     payment_method: Mapped[str] = mapped_column(String, default="CASH")
-    reference: Mapped[str] = mapped_column(String, nullable=True)
-    notes: Mapped[str] = mapped_column(String, nullable=True)
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reference: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     customer: Mapped["Customer"] = relationship(back_populates="payments")

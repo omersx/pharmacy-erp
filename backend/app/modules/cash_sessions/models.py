@@ -7,6 +7,7 @@ from typing import List
 
 class CashSession(Base):
     __tablename__ = "cash_sessions"
+    session_code: Mapped[str] = mapped_column(String, nullable=True, index=True)
     branch_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("branches.id"), index=True)
     cashier_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
     terminal_name: Mapped[str] = mapped_column(String, default="Main Register")
@@ -17,6 +18,7 @@ class CashSession(Base):
     variance: Mapped[float] = mapped_column(Numeric(10, 2), nullable=True)
     opened_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     closed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    opening_notes: Mapped[str] = mapped_column(String, nullable=True)
     notes: Mapped[str] = mapped_column(String, nullable=True)
 
     movements: Mapped[List["CashMovement"]] = relationship("CashMovement", back_populates="session", lazy="selectin")

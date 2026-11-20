@@ -41,6 +41,7 @@ export async function isReachable(timeoutMs = 4000): Promise<boolean> {
     const res = await fetch("/api/v1/health/live", {
       method: "GET",
       cache: "no-store",
+      credentials: "include",
       signal: controller.signal,
     });
     clearTimeout(timer);

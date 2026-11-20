@@ -16,6 +16,7 @@ import { SlideOver } from '@/components/ui/slide-over';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { toast } from 'react-hot-toast';
+import { CustomerStatementModal } from '@/components/customers/CustomerStatementModal';
 
 export default function CustomerDetailPage() {
   const params = useParams();
@@ -33,6 +34,9 @@ export default function CustomerDetailPage() {
   // Notes state
   const [notes, setNotes] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+
+  // Statement of Account Modal State
+  const [isStatementOpen, setIsStatementOpen] = useState(false);
 
   // Add Payment Modal State
   const [isPaymentSlideOpen, setIsPaymentSlideOpen] = useState(false);
@@ -93,18 +97,24 @@ export default function CustomerDetailPage() {
 
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
     setIsSubmittingPayment(true);
     try {
-      // Call API here
-      setTimeout(() => {
-        toast.success('Payment recorded successfully');
-        setIsPaymentSlideOpen(false);
-        setIsSubmittingPayment(false);
-        setPaymentForm({ amount: '', method: 'Cash', reference: '' });
-        fetchData(); // Refresh data
-      }, 1000);
-    } catch (error) {
-      toast.error('Failed to record payment');
+      await api.addCustomerPayment(id, {
+        amount: parseFloat(paymentForm.amount),
+        payment_method: paymentForm.method.toUpperCase().replace(/\s+/g, '_'),
+        reference: paymentForm.reference || undefined,
+      });
+      toast.success('Payment recorded successfully');
+      setIsPaymentSlideOpen(false);
+      setPaymentForm({ amount: '', method: 'Cash', reference: '' });
+      await fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to record payment');
+    } finally {
       setIsSubmittingPayment(false);
     }
   };
@@ -142,9 +152,17 @@ export default function CustomerDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button 
+            variant="outline" 
+            className="gap-2 border-brand-500/40 text-brand-400 hover:bg-brand-500/10 shadow-sm"
+            onClick={() => setIsStatementOpen(true)}
+          >
+            <FileText className="w-4 h-4 text-brand-400" />
+            <span>Statement of Account / كشف حساب</span>
+          </Button>
           <Button variant="outline" className="gap-2">
-            <FileEdit className="w-4 h-4" /> Edit Customer
+            <FileEdit className="w-4 h-4" /> Edit
           </Button>
           <Button variant="secondary" className="gap-2" onClick={() => setIsPaymentSlideOpen(true)}>
             <DollarSign className="w-4 h-4" /> Add Payment
@@ -312,11 +330,13 @@ export default function CustomerDetailPage() {
         {/* PAYMENTS TAB */}
         {activeTab === 'payments' && (
           <div className="space-y-4">
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold text-foreground">Payment Records</h3>
               <Button onClick={() => setIsPaymentSlideOpen(true)} className="gap-2 bg-brand-500 hover:bg-brand-600 text-white">
                 <Plus className="w-4 h-4" /> Add Payment
               </Button>
             </div>
+
             <div className="bg-[#111A2C] rounded-xl border border-border overflow-hidden shadow-sm">
               <table className="w-full text-sm">
                 <thead>
@@ -368,6 +388,22 @@ export default function CustomerDetailPage() {
                 <span className="text-sm text-muted-foreground font-medium mb-1 block">Available Credit</span>
                 <span className="text-2xl font-bold text-emerald-400">{currency} {((customer.creditLimit || 0) - (customer.balance || 0)).toLocaleString()}</span>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-brand-400" />
+                Ledger Entries / حركات الحساب
+              </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-brand-500/30 text-brand-400 hover:bg-brand-500/10 text-xs"
+                onClick={() => setIsStatementOpen(true)}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Official Statement / كشف الحساب الرسمي</span>
+              </Button>
             </div>
 
             <div className="bg-[#111A2C] rounded-xl border border-border overflow-hidden shadow-sm">
@@ -495,6 +531,21 @@ export default function CustomerDetailPage() {
           </div>
         </form>
       </SlideOver>
+
+      {/* Official A4 Statement Modal */}
+      <CustomerStatementModal
+        open={isStatementOpen}
+        onClose={() => {
+          setIsStatementOpen(false);
+          fetchData();
+        }}
+        customerId={id}
+        customerName={customer.name}
+        onOpenPaymentModal={() => {
+          setIsStatementOpen(false);
+          setIsPaymentSlideOpen(true);
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,10 @@
+// i18n request configuration - updated settings namespace
 import { getRequestConfig } from 'next-intl/server';
 import { routing } from './routing';
+import ar from '../messages/ar.json';
+import en from '../messages/en.json';
+
+const messagesMap: Record<string, any> = { ar, en };
 
 export default getRequestConfig(async ({ requestLocale }) => {
   let locale = await requestLocale;
@@ -8,6 +13,6 @@ export default getRequestConfig(async ({ requestLocale }) => {
   }
   return {
     locale,
-    messages: (await import(`../messages/${locale}.json`)).default
+    messages: messagesMap[locale] || messagesMap[routing.defaultLocale]
   };
 });

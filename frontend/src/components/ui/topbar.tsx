@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { Menu, Search, Bell, Sun, Moon, Globe } from 'lucide-react';
 import { Input } from './input';
 import { useRouter, usePathname } from '@/i18n/routing';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { NotificationCenter } from './notification-center';
 
@@ -24,6 +24,7 @@ export function TopBar() {
   const router = useRouter();
   const pathname = usePathname();
   const locale = useLocale();
+  const t = useTranslations();
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
@@ -46,7 +47,7 @@ export function TopBar() {
         </button>
         <div className="hidden md:block w-96">
           <Input 
-            placeholder="Search anything (Cmd+K)..." 
+            placeholder={t('common.searchPlaceholder')} 
             leadingIcon={<Search size={16} />}
             className="bg-surface border-transparent focus:border-brand-500 focus:bg-background"
           />
@@ -80,13 +81,13 @@ export function TopBar() {
               <DropdownMenu.Item 
                 className="text-sm px-2 py-1.5 outline-none rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 text-foreground transition-colors flex items-center"
               >
-                Profile Settings
+                {t('common.profileSettings')}
               </DropdownMenu.Item>
               <DropdownMenu.Item 
                 onClick={handleLogout}
                 className="text-sm px-2 py-1.5 outline-none rounded-md cursor-pointer hover:bg-red-500/10 text-danger transition-colors flex items-center mt-1"
               >
-                Log Out
+                {t('auth.logout')}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>

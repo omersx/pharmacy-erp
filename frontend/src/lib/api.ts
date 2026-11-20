@@ -141,6 +141,55 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  // Stock Locations & Refill
+  getLocations: (branchId?: string) =>
+    fetchApi<any[]>(`/inventory/locations${branchId ? `?branch_id=${branchId}` : ''}`),
+  getLocationStockSummary: (params?: { branch_id?: string; search?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    if (params?.search) q.append('search', params.search);
+    const qs = q.toString();
+    return fetchApi<any[]>(`/inventory/locations/stock-summary${qs ? `?${qs}` : ''}`);
+  },
+  getRefillSuggestions: (branchId?: string) =>
+    fetchApi<any[]>(`/inventory/locations/refill-suggestions${branchId ? `?branch_id=${branchId}` : ''}`),
+  quickRefill: (data: { medicine_id: string; quantity: number; batch_id?: string; branch_id?: string; notes?: string }) =>
+    fetchApi<any>('/inventory/transfers/quick-refill', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  bulkRefill: (data: { items: { medicine_id: string; quantity: number; batch_id?: string }[]; branch_id?: string; notes?: string }) =>
+    fetchApi<any>('/inventory/transfers/bulk-refill', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  moveToWarehouse: (data: { medicine_id: string; quantity: number; batch_id?: string; branch_id?: string; notes?: string }) =>
+    fetchApi<{ success: boolean; message: string; transferred_quantity: number }>('/inventory/transfers/shelf-to-warehouse', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  consolidateStockToShelf: (branchId?: string) =>
+    fetchApi<{ success: boolean; message: string; batches_count: number; total_shelf_stock: number }>('/inventory/locations/consolidate-to-shelf', {
+      method: 'POST',
+      body: JSON.stringify({ branch_id: branchId }),
+    }),
+  exportInventoryStock: async (format: 'xlsx' | 'csv' = 'xlsx', branchId?: string) => {
+    const q = new URLSearchParams();
+    q.append('format', format);
+    if (branchId) q.append('branch_id', branchId);
+    const res = await fetch(`${API_BASE}/inventory/export?${q.toString()}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error('Failed to export inventory stock');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().split('T')[0];
+    a.download = `inventory_stock_${dateStr}.${format}`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
   
   // Sales
   processSale: (data: any) => fetchApi('/sales/', {
@@ -181,6 +230,14 @@ export const api = {
   getCustomerPayments: (id: string) => fetchApi(`/customers/${id}/payments`),
   addCustomerPayment: (id: string, data: any) => fetchApi(`/customers/${id}/payments`, { method: 'POST', body: JSON.stringify(data) }),
   getCustomerCreditLedger: (id: string) => fetchApi(`/customers/${id}/credit-ledger`),
+  getCustomerStatement: (id: string, params?: { start_date?: string; end_date?: string; status_filter?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.start_date) q.append('start_date', params.start_date);
+    if (params?.end_date) q.append('end_date', params.end_date);
+    if (params?.status_filter && params.status_filter !== 'ALL') q.append('status_filter', params.status_filter);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return fetchApi(`/customers/${id}/statement${qs}`);
+  },
   updateCustomerNotes: (id: string, notes: string) => fetchApi(`/customers/${id}/notes`, { method: 'PATCH', body: JSON.stringify({ notes }) }),
   
   // Cash Sessions
@@ -195,6 +252,31 @@ export const api = {
     return fetchApi(`/cash-sessions${qs ? `?${qs}` : ''}`);
   },
   getSessionSummary: (id: string) => fetchApi(`/cash-sessions/${id}/summary`),
+  getLastClosedSession: (params?: { terminal_name?: string; branch_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.terminal_name) q.append('terminal_name', params.terminal_name);
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    const qs = q.toString();
+    return fetchApi(`/cash-sessions/last-closed${qs ? `?${qs}` : ''}`);
+  },
+  getPaymentsLedger: (params?: { payment_method?: string; cash_session_id?: string; branch_id?: string; start_date?: string; end_date?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.payment_method) q.append('payment_method', params.payment_method);
+    if (params?.cash_session_id) q.append('cash_session_id', params.cash_session_id);
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    if (params?.start_date) q.append('start_date', params.start_date);
+    if (params?.end_date) q.append('end_date', params.end_date);
+    const qs = q.toString();
+    return fetchApi(`/sales/payments/ledger${qs ? `?${qs}` : ''}`);
+  },
+  getPayments: (params?: { payment_method?: string; cash_session_id?: string; branch_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.payment_method) q.append('payment_method', params.payment_method);
+    if (params?.cash_session_id) q.append('cash_session_id', params.cash_session_id);
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    const qs = q.toString();
+    return fetchApi(`/sales/payments${qs ? `?${qs}` : ''}`);
+  },
   addCashMovement: (id: string, data: { movement_type: 'CASH_IN' | 'CASH_OUT'; amount: number; reason: string }) =>
     fetchApi(`/cash-sessions/${id}/movements`, { method: 'POST', body: JSON.stringify(data) }),
   
@@ -266,6 +348,24 @@ export const api = {
     }
     return res.json();
   },
+  restoreStockFromExcel: async (file: File, branchId?: string, inventoryMode?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const params = new URLSearchParams();
+    if (branchId) params.append('branch_id', branchId);
+    if (inventoryMode) params.append('inventory_mode', inventoryMode);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/inventory/restore-stock${query}`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(error?.detail || `API Error: ${res.status}`);
+    }
+    return res.json();
+  },
   // Branches
   getBranches: () => fetchApi('/branches'),
   getBranch: (id: string) => fetchApi(`/branches/${id}`),
@@ -287,4 +387,92 @@ export const api = {
   markNotificationAsRead: (id: string) => fetchApi(`/notifications/${id}/read`, { method: 'PATCH' }),
   markAllNotificationsAsRead: () => fetchApi('/notifications/read-all', { method: 'POST' }),
   deleteNotification: (id: string) => fetchApi(`/notifications/${id}`, { method: 'DELETE' }),
+
+  // Odoo Parity Invoicing
+  getPharmacyProfile: (branchId?: string) => {
+    const q = branchId ? `?branch_id=${branchId}` : '';
+    return fetchApi(`/invoicing/profile${q}`);
+  },
+  updatePharmacyProfile: (data: any, branchId?: string) => {
+    const q = branchId ? `?branch_id=${branchId}` : '';
+    return fetchApi(`/invoicing/profile${q}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  getInvoices: (params?: { status?: string; search?: string; customer_id?: string; source_type?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.status && params.status !== 'ALL') q.append('status', params.status);
+    if (params?.search) q.append('search', params.search);
+    if (params?.customer_id) q.append('customer_id', params.customer_id);
+    if (params?.source_type && params.source_type !== 'ALL') q.append('source_type', params.source_type);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return fetchApi(`/invoicing/invoices${qs}`);
+  },
+  getInvoice: (id: string) => fetchApi(`/invoicing/invoices/${id}`),
+  createInvoice: (data: any) => fetchApi('/invoicing/invoices', { method: 'POST', body: JSON.stringify(data) }),
+  updateInvoice: (id: string, data: any) => fetchApi(`/invoicing/invoices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  confirmInvoice: (id: string) => fetchApi(`/invoicing/invoices/${id}/confirm`, { method: 'POST' }),
+  payInvoice: (id: string, data: { payment_method: string; amount: number; payment_date?: string; reference?: string; notes?: string }) =>
+    fetchApi(`/invoicing/invoices/${id}/pay`, { method: 'POST', body: JSON.stringify(data) }),
+  cancelInvoice: (id: string) => fetchApi(`/invoicing/invoices/${id}/cancel`, { method: 'POST' }),
+  resetInvoiceToDraft: (id: string) => fetchApi(`/invoicing/invoices/${id}/reset-draft`, { method: 'POST' }),
+  deleteInvoice: (id: string) => fetchApi(`/invoicing/invoices/${id}`, { method: 'DELETE' }),
+  generateInvoiceFromPosSale: (saleId: string, customerId?: string) => {
+    const q = customerId ? `?customer_id=${customerId}` : '';
+    return fetchApi(`/invoicing/from-pos/${saleId}${q}`, { method: 'POST' });
+  },
+
+  // Procure-to-Stock & Purchases
+  getPurchaseOrders: (params?: { branch_id?: string; supplier_id?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    if (params?.supplier_id) q.append('supplier_id', params.supplier_id);
+    if (params?.status && params.status !== 'ALL') q.append('status', params.status);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return fetchApi<any[]>(`/purchases/orders${qs}`);
+  },
+  getPurchaseOrder: (id: string) => fetchApi<any>(`/purchases/orders/${id}`),
+  createPurchaseOrder: (data: any) => fetchApi<any>('/purchases/orders', { method: 'POST', body: JSON.stringify(data) }),
+  submitPurchaseOrder: (id: string) => fetchApi<any>(`/purchases/orders/${id}/submit`, { method: 'POST' }),
+  approvePurchaseOrder: (id: string, notes?: string) =>
+    fetchApi<any>(`/purchases/orders/${id}/approve`, { method: 'POST', body: JSON.stringify({ notes }) }),
+  cancelPurchaseOrder: (id: string, reason: string) =>
+    fetchApi<any>(`/purchases/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  getGoodsReceipts: (params?: { branch_id?: string; po_id?: string; supplier_id?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    if (params?.po_id) q.append('po_id', params.po_id);
+    if (params?.supplier_id) q.append('supplier_id', params.supplier_id);
+    if (params?.status && params.status !== 'ALL') q.append('status', params.status);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return fetchApi<any[]>(`/purchases/receipts${qs}`);
+  },
+  getGoodsReceipt: (id: string) => fetchApi<any>(`/purchases/receipts/${id}`),
+  createGoodsReceipt: (data: any) => fetchApi<any>('/purchases/receipts', { method: 'POST', body: JSON.stringify(data) }),
+  postGoodsReceipt: (id: string) => fetchApi<any>(`/purchases/receipts/${id}/post`, { method: 'POST' }),
+
+  getSupplierReturns: (params?: { branch_id?: string; supplier_id?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.branch_id) q.append('branch_id', params.branch_id);
+    if (params?.supplier_id) q.append('supplier_id', params.supplier_id);
+    if (params?.status && params.status !== 'ALL') q.append('status', params.status);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return fetchApi<any[]>(`/purchases/returns${qs}`);
+  },
+  getSupplierReturn: (id: string) => fetchApi<any>(`/purchases/returns/${id}`),
+  createSupplierReturn: (data: any) => fetchApi<any>('/purchases/returns', { method: 'POST', body: JSON.stringify(data) }),
+  postSupplierReturn: (id: string) => fetchApi<any>(`/purchases/returns/${id}/post`, { method: 'POST' }),
+
+  getSupplierTerms: (params?: { supplier_id?: string; medicine_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.supplier_id) q.append('supplier_id', params.supplier_id);
+    if (params?.medicine_id) q.append('medicine_id', params.medicine_id);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return fetchApi<any[]>(`/purchases/supplier-terms${qs}`);
+  },
+  createOrUpdateSupplierTerm: (data: any) => fetchApi<any>('/purchases/supplier-terms', { method: 'POST', body: JSON.stringify(data) }),
+
+  getPurchaseAnalytics: (branchId?: string) => {
+    const q = branchId ? `?branch_id=${branchId}` : '';
+    return fetchApi<any>(`/purchases/analytics${q}`);
+  },
 };

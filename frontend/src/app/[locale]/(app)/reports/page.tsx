@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Select as CustomSelect } from '@/components/ui/select';
@@ -36,6 +38,8 @@ type TabId = typeof TABS[number]['id'];
 const COLORS = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#ec4899'];
 
 export default function ReportsPage() {
+  const { locale } = useParams();
+  const t = useTranslations('reports');
   const [activeTab, setActiveTab] = useState<TabId>('sales');
   const { currency } = useAppStore();
   
@@ -87,11 +91,12 @@ export default function ReportsPage() {
           });
           
           if ((rangeData as any).daily_breakdown) {
-            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
             const chartData = (rangeData as any).daily_breakdown.map((d: any) => {
               const date = new Date(d.date);
+              const dayKey = dayKeys[date.getDay()];
               return {
-                name: dayNames[date.getDay()] || d.date,
+                name: dayKey ? t(`days.${dayKey}`) : d.date,
                 revenue: d.revenue || d.total_revenue || 0,
                 orders: d.count || d.total_sales || 0
               };
@@ -135,23 +140,31 @@ export default function ReportsPage() {
     }
   };
 
-  const expiryData = [
-    { name: 'Expired', value: expirySummary.expired || 0 },
-    { name: '< 30 Days', value: expirySummary.expiring_30_days || 0 },
-    { name: '30-60 Days', value: expirySummary.expiring_60_days || 0 },
-    { name: '60-90 Days', value: expirySummary.expiring_90_days || 0 },
-    { name: 'Safe (>90)', value: expirySummary.safe || 0 },
-  ];
+  const expiryData = useMemo(() => [
+    { name: t('inventoryTab.expired'), value: expirySummary.expired || 0, key: 'expired' },
+    { name: t('inventoryTab.lessThan30'), value: expirySummary.expiring_30_days || 0, key: 'lessThan30' },
+    { name: t('inventoryTab.days30to60'), value: expirySummary.expiring_60_days || 0, key: 'days30to60' },
+    { name: t('inventoryTab.days60to90'), value: expirySummary.expiring_90_days || 0, key: 'days60to90' },
+    { name: t('inventoryTab.safe'), value: expirySummary.safe || 0, key: 'safe' },
+  ], [expirySummary, t]);
 
   // ── Export Functions ──
-  const exportToCSV = (reportType: string) => {
+  const exportToCSV = async (reportType: string) => {
+    if (reportType === 'inventory') {
+      try {
+        await api.exportInventoryStock('csv');
+        toast.success(t('exportTab.exportedSuccess', { filename: 'inventory_stock.csv' }));
+      } catch {
+        toast.error('Failed to export inventory');
+      }
+      return;
+    }
+
     let data = '';
     let filename = `${reportType}_report.csv`;
     
     if (reportType === 'sales') {
       data = 'Day,Revenue,Orders\n' + salesChartData.map(d => `${d.name},${d.revenue},${d.orders}`).join('\n');
-    } else if (reportType === 'inventory') {
-      data = 'Status,Count\n' + expiryData.map(d => `${d.name},${d.value}`).join('\n');
     } else if (reportType === 'customers') {
       data = 'Customer,Phone,Balance\n' + customerBalances.map(c => `${c.name},${c.phone || 'N/A'},${Number(c.credit_balance).toFixed(2)}`).join('\n');
     }
@@ -162,7 +175,7 @@ export default function ReportsPage() {
     a.href = url;
     a.download = filename;
     a.click();
-    toast.success(`${filename} exported successfully`);
+    toast.success(t('exportTab.exportedSuccess', { filename }));
   };
 
   const exportToPDF = (reportType: string) => {
@@ -199,7 +212,7 @@ export default function ReportsPage() {
     });
     
     doc.save(`${reportType}_report.pdf`);
-    toast.success(`PDF report generated`);
+    toast.success(t('exportTab.pdfGenerated'));
   };
 
   // ═══════════════════════════════════════════════════════════════════
@@ -215,8 +228,8 @@ export default function ReportsPage() {
               <BarChart3 className="h-5 w-5 text-brand-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Reports & Analytics</h1>
-              <p className="text-sm text-muted-foreground">Comprehensive insights into your pharmacy operations</p>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+              <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
             </div>
           </div>
           <div className="w-48">
@@ -224,9 +237,9 @@ export default function ReportsPage() {
               value={dateRange}
               onChange={setDateRange}
               options={[
-                { value: '7days', label: 'Last 7 Days' },
-                { value: '30days', label: 'Last 30 Days' },
-                { value: 'year', label: 'This Year' },
+                { value: '7days', label: t('dateRanges.7days') },
+                { value: '30days', label: t('dateRanges.30days') },
+                { value: 'year', label: t('dateRanges.year') },
               ]}
             />
           </div>
@@ -236,7 +249,7 @@ export default function ReportsPage() {
       {/* Two-panel layout */}
       <div className="flex-1 flex flex-col md:flex-row rounded-b-xl border border-t-0 border-border bg-surface overflow-hidden shadow-sm">
         {/* Left Sidebar Nav */}
-        <nav className="w-full md:w-64 flex-none border-b md:border-b-0 md:border-r border-border bg-background/50 p-3 overflow-x-auto md:overflow-y-auto scrollbar-hide">
+        <nav className="w-full md:w-64 flex-none border-b md:border-b-0 md:border-r rtl:md:border-r-0 rtl:md:border-l border-border bg-background/50 p-3 overflow-x-auto md:overflow-y-auto scrollbar-hide">
           <div className="flex md:flex-col gap-1 space-y-0 md:space-y-1">
             {TABS.map((tab) => {
               const Icon = tab.icon;
@@ -246,14 +259,14 @@ export default function ReportsPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "flex whitespace-nowrap flex-none w-auto md:w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all duration-150",
+                    "flex whitespace-nowrap flex-none w-auto md:w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left rtl:text-right text-sm font-medium transition-all duration-150",
                     isActive
                       ? "bg-brand-500/10 text-brand-400 shadow-sm"
                       : "text-muted-foreground hover:bg-gray-100 hover:text-foreground dark:hover:bg-gray-800/60 dark:hover:text-gray-200"
                   )}
                 >
                   <Icon className={cn("h-4 w-4 flex-none", isActive ? "text-brand-400" : "text-muted-foreground")} />
-                  <span className="truncate">{tab.label}</span>
+                  <span className="truncate">{t(`tabs.${tab.id}`)}</span>
                 </button>
               );
             })}
@@ -281,36 +294,36 @@ export default function ReportsPage() {
   function renderSalesTab() {
     return (
       <div className="space-y-6 fade-in">
-        <h2 className="text-lg font-semibold text-foreground">Sales Performance</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t('salesTab.title')}</h2>
         
         {/* KPI Cards */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('salesTab.totalRevenue')}</p>
             <p className="text-3xl font-bold text-foreground mt-2">{currency} {salesKPI.revenue.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
             <p className="text-xs text-green-400 flex items-center mt-2 font-medium">
-              <ArrowUpRight className="h-3 w-3 mr-1" /> +12.5% from previous period
+              <ArrowUpRight className="h-3 w-3 mr-1 rtl:mr-0 rtl:ml-1" /> +12.5% {t('salesTab.fromPreviousPeriod')}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('salesTab.totalOrders')}</p>
             <p className="text-3xl font-bold text-foreground mt-2">{salesKPI.orders.toLocaleString()}</p>
             <p className="text-xs text-green-400 flex items-center mt-2 font-medium">
-              <ArrowUpRight className="h-3 w-3 mr-1" /> +5.2% from previous period
+              <ArrowUpRight className="h-3 w-3 mr-1 rtl:mr-0 rtl:ml-1" /> +5.2% {t('salesTab.fromPreviousPeriod')}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-sm font-medium text-muted-foreground">Average Order Value</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('salesTab.avgOrderValue')}</p>
             <p className="text-3xl font-bold text-foreground mt-2">{currency} {salesKPI.avgOrder.toFixed(2)}</p>
             <p className="text-xs text-red-400 flex items-center mt-2 font-medium">
-              <ArrowDownRight className="h-3 w-3 mr-1" /> -1.4% from previous period
+              <ArrowDownRight className="h-3 w-3 mr-1 rtl:mr-0 rtl:ml-1" /> -1.4% {t('salesTab.fromPreviousPeriod')}
             </p>
           </div>
         </div>
 
         {/* Chart */}
         <div className="rounded-xl border border-border bg-surface p-5 shadow-sm h-[350px]">
-          <h3 className="text-sm font-medium text-foreground mb-4">Revenue Trend</h3>
+          <h3 className="text-sm font-medium text-foreground mb-4">{t('salesTab.revenueTrend')}</h3>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={salesChartData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" />
@@ -328,25 +341,30 @@ export default function ReportsPage() {
         {/* Top Products */}
         <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
           <div className="p-5 border-b border-border">
-            <h3 className="text-sm font-medium text-foreground">Top Selling Products</h3>
+            <h3 className="text-sm font-medium text-foreground">{t('salesTab.topSellingProducts')}</h3>
           </div>
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left rtl:text-right text-sm">
             <thead className="bg-background text-xs uppercase text-muted-foreground border-b border-border">
               <tr>
-                <th className="px-5 py-3 font-semibold">Product</th>
-                <th className="px-5 py-3 font-semibold text-right">Quantity Sold</th>
-                <th className="px-5 py-3 font-semibold text-right">Revenue</th>
+                <th className="px-5 py-3 font-semibold text-left rtl:text-right">{t('salesTab.product')}</th>
+                <th className="px-5 py-3 font-semibold text-right rtl:text-left">{t('salesTab.quantitySold')}</th>
+                <th className="px-5 py-3 font-semibold text-right rtl:text-left">{t('salesTab.revenue')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {topProducts.length > 0 ? topProducts.map((p, i) => (
                 <tr key={i} className="hover:bg-gray-800/20">
-                  <td className="px-5 py-3 font-medium text-foreground">{p.name_en} <span className="text-xs text-muted-foreground ml-2">{p.name_ar}</span></td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{p.total_quantity}</td>
-                  <td className="px-5 py-3 text-right text-foreground font-medium">{currency} {Number(p.total_revenue).toFixed(2)}</td>
+                  <td className="px-5 py-3 font-medium text-foreground">
+                    {locale === 'ar' && p.name_ar ? p.name_ar : p.name_en}{' '}
+                    <span className="text-xs text-muted-foreground ml-2 rtl:ml-0 rtl:mr-2">
+                      {locale === 'ar' && p.name_ar ? p.name_en : p.name_ar}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right rtl:text-left text-muted-foreground">{p.total_quantity}</td>
+                  <td className="px-5 py-3 text-right rtl:text-left text-foreground font-medium">{currency} {Number(p.total_revenue).toFixed(2)}</td>
                 </tr>
               )) : (
-                <tr><td colSpan={3} className="px-5 py-8 text-center text-muted-foreground">No sales data available for this period.</td></tr>
+                <tr><td colSpan={3} className="px-5 py-8 text-center text-muted-foreground">{t('salesTab.noSalesData')}</td></tr>
               )}
             </tbody>
           </table>
@@ -358,31 +376,31 @@ export default function ReportsPage() {
   function renderInventoryTab() {
     return (
       <div className="space-y-6 fade-in">
-        <h2 className="text-lg font-semibold text-foreground">Inventory & Expiry</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t('inventoryTab.title')}</h2>
         
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Stock Value Card */}
           <div className="rounded-xl border border-border bg-surface p-6 shadow-sm flex flex-col justify-center items-center text-center">
             <div className="h-16 w-16 rounded-full bg-brand-500/10 flex items-center justify-center mb-4">
               <Package className="h-8 w-8 text-brand-400" />
             </div>
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Stock Value</p>
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('inventoryTab.totalStockValue')}</p>
             <p className="text-4xl font-bold text-foreground mt-2">{currency} {stockValue.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-            <p className="text-sm text-muted-foreground mt-4 max-w-xs">Based on latest purchase prices of all batches currently in stock.</p>
+            <p className="text-sm text-muted-foreground mt-4 max-w-xs">{t('inventoryTab.stockValueDesc')}</p>
           </div>
 
           {/* Expiry Pie Chart */}
           <div className="rounded-xl border border-border bg-surface p-5 shadow-sm h-[300px]">
-            <h3 className="text-sm font-medium text-foreground mb-2">Expiry Distribution (Batches)</h3>
+            <h3 className="text-sm font-medium text-foreground mb-2">{t('inventoryTab.expiryDistribution')}</h3>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={expiryData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
                   {expiryData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={
-                      entry.name === 'Expired' ? '#ef4444' :
-                      entry.name === '< 30 Days' ? '#f97316' :
-                      entry.name === '30-60 Days' ? '#f59e0b' :
-                      entry.name === '60-90 Days' ? '#eab308' : '#10b981'
+                      entry.key === 'expired' ? '#ef4444' :
+                      entry.key === 'lessThan30' ? '#f97316' :
+                      entry.key === 'days30to60' ? '#f59e0b' :
+                      entry.key === 'days60to90' ? '#eab308' : '#10b981'
                     } />
                   ))}
                 </Pie>
@@ -426,22 +444,22 @@ export default function ReportsPage() {
 
     return (
       <div className="space-y-6 fade-in">
-        <h2 className="text-lg font-semibold text-foreground">Financial Summary</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t('financialTab.title')}</h2>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-sm font-medium text-muted-foreground">Gross Revenue</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('financialTab.grossRevenue')}</p>
             <p className="text-3xl font-bold text-foreground mt-2">{currency} {revenue.toLocaleString()}</p>
           </div>
           <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-            <p className="text-sm font-medium text-muted-foreground">Cost of Goods Sold (COGS)</p>
+            <p className="text-sm font-medium text-muted-foreground">{t('financialTab.cogs')}</p>
             <p className="text-3xl font-bold text-foreground mt-2">{currency} {cogs.toLocaleString()}</p>
           </div>
           <div className="rounded-xl border border-border bg-brand-500/5 p-5 shadow-sm">
-            <p className="text-sm font-medium text-brand-400">Gross Profit</p>
+            <p className="text-sm font-medium text-brand-400">{t('financialTab.grossProfit')}</p>
             <p className="text-3xl font-bold text-brand-500 mt-2">{currency} {profit.toLocaleString()}</p>
-            {margin > 0 && <Badge variant="success" className="mt-3">{margin}% Margin</Badge>}
+            {margin > 0 && <Badge variant="success" className="mt-3">{t('financialTab.margin', { margin })}</Badge>}
           </div>
         </div>
 
@@ -449,8 +467,8 @@ export default function ReportsPage() {
         <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
           <div className="p-5 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 overflow-x-auto">
             <div className="shrink-0">
-              <h3 className="text-base font-semibold text-foreground">Payment Method Breakdown</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Revenue split by payment channel</p>
+              <h3 className="text-base font-semibold text-foreground">{t('financialTab.paymentBreakdown')}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">{t('financialTab.paymentBreakdownDesc')}</p>
             </div>
             <div className="flex items-center rounded-lg border border-border bg-background p-0.5 shrink-0 whitespace-nowrap">
               {filterOptions.map(f => (
@@ -464,9 +482,9 @@ export default function ReportsPage() {
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  {f === 'all' ? 'All' 
-                    : f === 'cash' ? '💵 Cash' 
-                    : f === 'mobile' ? '📱 Mobile'
+                  {f === 'all' ? t('financialTab.filters.all') 
+                    : f === 'cash' ? t('financialTab.filters.cash') 
+                    : f === 'mobile' ? t('financialTab.filters.mobile')
                     : `${METHOD_ICONS[f] || '💳'} ${methods.find((m: any) => m.method === f)?.label}`}
                 </button>
               ))}
@@ -476,7 +494,7 @@ export default function ReportsPage() {
           {methods.length === 0 ? (
             <div className="p-12 text-center">
               <DollarSign className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">No payment data for the selected period</p>
+              <p className="text-sm text-muted-foreground">{t('financialTab.noPaymentData')}</p>
             </div>
           ) : (
             <div className="p-5 space-y-5">
@@ -484,8 +502,8 @@ export default function ReportsPage() {
               {methodFilter === 'all' && revenue > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>💵 Cash: {currency} {cashTotal.toLocaleString()}</span>
-                    <span>📱 Mobile: {currency} {mobileTotal.toLocaleString()}</span>
+                    <span>{t('financialTab.cashLabel')} {currency} {cashTotal.toLocaleString()}</span>
+                    <span>{t('financialTab.mobileLabel')} {currency} {mobileTotal.toLocaleString()}</span>
                   </div>
                   <div className="h-3 bg-border rounded-full overflow-hidden flex">
                     {cashTotal > 0 && (
@@ -516,10 +534,10 @@ export default function ReportsPage() {
                           <span className="text-xl">{icon}</span>
                           <div>
                             <p className="text-sm font-semibold text-foreground">{m.label}</p>
-                            <p className="text-xs text-muted-foreground">{m.count} transaction{m.count !== 1 ? 's' : ''}</p>
+                            <p className="text-xs text-muted-foreground">{t('financialTab.transactions', { count: m.count, s: m.count !== 1 ? 's' : '' })}</p>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right rtl:text-left">
                           <p className="text-lg font-bold text-foreground tabular-nums">{currency} {m.amount.toLocaleString()}</p>
                           <p className="text-xs font-medium tabular-nums" style={{ color }}>{m.percentage}%</p>
                         </div>
@@ -538,7 +556,7 @@ export default function ReportsPage() {
               {/* Mobile Money Sub-breakdown */}
               {methodFilter === 'all' && mobileMethods.length > 1 && (
                 <div className="mt-4 rounded-lg border border-dashed border-blue-500/30 bg-blue-500/5 p-4">
-                  <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-3">📱 Mobile Money Breakdown</p>
+                  <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-3">{t('financialTab.mobileMoneyBreakdown')}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {mobileMethods.map((m: any) => {
                       const icon = METHOD_ICONS[m.method] || '📱';
@@ -549,7 +567,7 @@ export default function ReportsPage() {
                           <span className="text-2xl">{icon}</span>
                           <p className="text-xs font-semibold text-foreground mt-1">{m.label}</p>
                           <p className="text-sm font-bold text-foreground mt-0.5">{currency} {m.amount.toLocaleString()}</p>
-                          <p className="text-xs mt-0.5" style={{ color }}>{mobilePercent}% of mobile</p>
+                          <p className="text-xs mt-0.5" style={{ color }}>{t('financialTab.percentOfMobile', { percent: mobilePercent })}</p>
                         </div>
                       );
                     })}
@@ -566,34 +584,34 @@ export default function ReportsPage() {
   function renderCustomerTab() {
     return (
       <div className="space-y-6 fade-in">
-        <h2 className="text-lg font-semibold text-foreground">Customer Balances</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t('customerTab.title')}</h2>
         
         <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left rtl:text-right text-sm">
             <thead className="bg-background text-xs uppercase text-muted-foreground border-b border-border">
               <tr>
-                <th className="px-5 py-3 font-semibold">Customer</th>
-                <th className="px-5 py-3 font-semibold">Phone</th>
-                <th className="px-5 py-3 font-semibold text-right">Credit Limit</th>
-                <th className="px-5 py-3 font-semibold text-right">Current Balance</th>
-                <th className="px-5 py-3 font-semibold text-center">Status</th>
+                <th className="px-5 py-3 font-semibold text-left rtl:text-right">{t('customerTab.customer')}</th>
+                <th className="px-5 py-3 font-semibold text-left rtl:text-right">{t('customerTab.phone')}</th>
+                <th className="px-5 py-3 font-semibold text-right rtl:text-left">{t('customerTab.creditLimit')}</th>
+                <th className="px-5 py-3 font-semibold text-right rtl:text-left">{t('customerTab.currentBalance')}</th>
+                <th className="px-5 py-3 font-semibold text-center">{t('customerTab.status')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {customerBalances.length > 0 ? customerBalances.map(c => (
                 <tr key={c.id} className="hover:bg-gray-800/20">
                   <td className="px-5 py-3 font-medium text-foreground">{c.name}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{c.phone || '-'}</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{currency} {Number(c.credit_limit).toFixed(2)}</td>
-                  <td className="px-5 py-3 text-right text-foreground font-bold">{currency} {Number(c.credit_balance).toFixed(2)}</td>
+                  <td className="px-5 py-3 text-muted-foreground" dir="ltr">{c.phone || '-'}</td>
+                  <td className="px-5 py-3 text-right rtl:text-left text-muted-foreground">{currency} {Number(c.credit_limit).toFixed(2)}</td>
+                  <td className="px-5 py-3 text-right rtl:text-left text-foreground font-bold">{currency} {Number(c.credit_balance).toFixed(2)}</td>
                   <td className="px-5 py-3 text-center">
                     {c.credit_balance > (c.credit_limit * 0.9) ? (
-                      <Badge variant="danger">Near Limit</Badge>
-                    ) : <Badge variant="success">Good</Badge>}
+                      <Badge variant="danger">{t('customerTab.nearLimit')}</Badge>
+                    ) : <Badge variant="success">{t('customerTab.good')}</Badge>}
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={5} className="px-5 py-12 text-center text-muted-foreground">No customers with outstanding credit balances.</td></tr>
+                <tr><td colSpan={5} className="px-5 py-12 text-center text-muted-foreground">{t('customerTab.noCustomers')}</td></tr>
               )}
             </tbody>
           </table>
@@ -609,8 +627,8 @@ export default function ReportsPage() {
           <Truck className="h-10 w-10 text-muted-foreground" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-foreground">Supplier Reports</h2>
-          <p className="text-muted-foreground mt-2 max-w-md mx-auto">Detailed supplier performance, purchase history, and outstanding orders reporting is currently under development.</p>
+          <h2 className="text-xl font-bold text-foreground">{t('supplierTab.title')}</h2>
+          <p className="text-muted-foreground mt-2 max-w-md mx-auto">{t('supplierTab.desc')}</p>
         </div>
       </div>
     );
@@ -622,8 +640,8 @@ export default function ReportsPage() {
     return (
       <div className="space-y-6 fade-in">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Medicine Analysis</h2>
-          <p className="text-sm text-muted-foreground">Sales movement and dead stock identification for the selected period</p>
+          <h2 className="text-lg font-semibold text-foreground">{t('medicineTab.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('medicineTab.subtitle')}</p>
         </div>
 
         {/* Summary Overview */}
@@ -631,28 +649,28 @@ export default function ReportsPage() {
           <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-5 shadow-sm">
             <div className="flex items-center gap-3 text-green-500 mb-2">
               <TrendingUp className="h-5 w-5" />
-              <p className="text-sm font-semibold">Fast Moving</p>
+              <p className="text-sm font-semibold">{t('medicineTab.fastMoving')}</p>
             </div>
             <p className="text-3xl font-bold text-foreground">{fast_moving.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Top selling items by volume</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('medicineTab.fastMovingDesc')}</p>
           </div>
           
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5 shadow-sm">
             <div className="flex items-center gap-3 text-amber-500 mb-2">
               <ArrowDownRight className="h-5 w-5" />
-              <p className="text-sm font-semibold">Slow Moving</p>
+              <p className="text-sm font-semibold">{t('medicineTab.slowMoving')}</p>
             </div>
             <p className="text-3xl font-bold text-foreground">{slow_moving.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Items with very few sales</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('medicineTab.slowMovingDesc')}</p>
           </div>
           
           <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 shadow-sm">
             <div className="flex items-center gap-3 text-red-500 mb-2">
               <AlertTriangle className="h-5 w-5" />
-              <p className="text-sm font-semibold">Dead Stock</p>
+              <p className="text-sm font-semibold">{t('medicineTab.deadStock')}</p>
             </div>
             <p className="text-3xl font-bold text-foreground">{dead_stock.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Items in stock with 0 sales</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('medicineTab.deadStockDesc')}</p>
           </div>
         </div>
 
@@ -661,7 +679,7 @@ export default function ReportsPage() {
           <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden flex flex-col">
             <div className="p-4 border-b border-border bg-background/50 flex items-center justify-between">
               <h3 className="font-semibold text-foreground flex items-center gap-2">
-                <span className="text-green-500">🚀</span> Fast Moving
+                <span className="text-green-500">🚀</span> {t('medicineTab.fastMoving')}
               </h3>
             </div>
             <div className="divide-y divide-border overflow-auto max-h-[400px]">
@@ -670,17 +688,17 @@ export default function ReportsPage() {
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded-full bg-green-500/10 text-green-500 flex items-center justify-center text-xs font-bold">{i + 1}</div>
                     <div>
-                      <p className="text-sm font-medium text-foreground line-clamp-1">{m.name_en}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">{m.name_ar}</p>
+                      <p className="text-sm font-medium text-foreground line-clamp-1">{locale === 'ar' && m.name_ar ? m.name_ar : m.name_en}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{locale === 'ar' && m.name_ar ? m.name_en : m.name_ar}</p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold text-foreground">{m.quantity} <span className="text-xs font-normal text-muted-foreground">sold</span></p>
+                  <div className="text-right rtl:text-left shrink-0">
+                    <p className="text-sm font-bold text-foreground">{m.quantity} <span className="text-xs font-normal text-muted-foreground">{t('medicineTab.sold')}</span></p>
                     <p className="text-xs text-green-400 font-medium">{currency} {m.revenue.toLocaleString()}</p>
                   </div>
                 </div>
               )) : (
-                <div className="p-8 text-center text-muted-foreground text-sm">No sales data found.</div>
+                <div className="p-8 text-center text-muted-foreground text-sm">{t('medicineTab.noSales')}</div>
               )}
             </div>
           </div>
@@ -689,7 +707,7 @@ export default function ReportsPage() {
           <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden flex flex-col">
             <div className="p-4 border-b border-border bg-background/50 flex items-center justify-between">
               <h3 className="font-semibold text-foreground flex items-center gap-2">
-                <span className="text-amber-500">🐢</span> Slow Moving
+                <span className="text-amber-500">🐢</span> {t('medicineTab.slowMoving')}
               </h3>
             </div>
             <div className="divide-y divide-border overflow-auto max-h-[400px]">
@@ -698,17 +716,17 @@ export default function ReportsPage() {
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs font-bold">{i + 1}</div>
                     <div>
-                      <p className="text-sm font-medium text-foreground line-clamp-1">{m.name_en}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">{m.name_ar}</p>
+                      <p className="text-sm font-medium text-foreground line-clamp-1">{locale === 'ar' && m.name_ar ? m.name_ar : m.name_en}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{locale === 'ar' && m.name_ar ? m.name_en : m.name_ar}</p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold text-foreground">{m.quantity} <span className="text-xs font-normal text-muted-foreground">sold</span></p>
+                  <div className="text-right rtl:text-left shrink-0">
+                    <p className="text-sm font-bold text-foreground">{m.quantity} <span className="text-xs font-normal text-muted-foreground">{t('medicineTab.sold')}</span></p>
                     <p className="text-xs text-amber-400 font-medium">{currency} {m.revenue.toLocaleString()}</p>
                   </div>
                 </div>
               )) : (
-                <div className="p-8 text-center text-muted-foreground text-sm">No sales data found.</div>
+                <div className="p-8 text-center text-muted-foreground text-sm">{t('medicineTab.noSales')}</div>
               )}
             </div>
           </div>
@@ -717,27 +735,27 @@ export default function ReportsPage() {
           <div className="rounded-xl border border-border bg-surface shadow-sm overflow-hidden flex flex-col">
             <div className="p-4 border-b border-border bg-background/50 flex items-center justify-between">
               <h3 className="font-semibold text-foreground flex items-center gap-2">
-                <span className="text-red-500">💀</span> Dead Stock
+                <span className="text-red-500">💀</span> {t('medicineTab.deadStock')}
               </h3>
-              <Badge variant="danger" className="text-[10px]">0 Sales</Badge>
+              <Badge variant="danger" className="text-[10px]">{t('medicineTab.zeroSales')}</Badge>
             </div>
             <div className="divide-y divide-border overflow-auto max-h-[400px]">
               {dead_stock.length > 0 ? dead_stock.map((m: any) => (
                 <div key={m.id} className="p-4 hover:bg-background/50 transition-colors flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-foreground line-clamp-1">{m.name_en}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{m.name_ar}</p>
+                    <p className="text-sm font-medium text-foreground line-clamp-1">{locale === 'ar' && m.name_ar ? m.name_ar : m.name_en}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{locale === 'ar' && m.name_ar ? m.name_en : m.name_ar}</p>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right rtl:text-left shrink-0">
                     <Badge variant="outline" className="bg-red-500/5 text-red-400 border-red-500/20">
-                      {m.stock} in stock
+                      {t('medicineTab.inStock', { count: m.stock })}
                     </Badge>
                   </div>
                 </div>
               )) : (
                 <div className="p-8 text-center text-muted-foreground text-sm flex flex-col items-center">
                   <span className="text-2xl mb-2">🎉</span>
-                  No dead stock found! Everything is selling.
+                  {t('medicineTab.noDeadStock')}
                 </div>
               )}
             </div>
@@ -752,16 +770,16 @@ export default function ReportsPage() {
   // ═══════════════════════════════════════════════════════════════════
   function renderExportTab() {
     const exports = [
-      { id: 'sales', label: 'Sales Transactions', desc: 'Detailed log of all sales, items, and discounts' },
-      { id: 'inventory', label: 'Inventory Snapshot', desc: 'Current stock levels and expiry dates' },
-      { id: 'customers', label: 'Customer Balances', desc: 'List of customers and their credit status' },
+      { id: 'sales', label: t('exportTab.salesLog'), desc: t('exportTab.salesLogDesc') },
+      { id: 'inventory', label: t('exportTab.inventorySnapshot'), desc: t('exportTab.inventorySnapshotDesc') },
+      { id: 'customers', label: t('exportTab.customerBalances'), desc: t('exportTab.customerBalancesDesc') },
     ];
 
     return (
       <div className="space-y-6 fade-in">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Export Center</h2>
-          <p className="text-sm text-muted-foreground">Download comprehensive reports for external analysis</p>
+          <h2 className="text-lg font-semibold text-foreground">{t('exportTab.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('exportTab.subtitle')}</p>
         </div>
 
         <div className="grid gap-4 max-w-3xl">
@@ -776,13 +794,13 @@ export default function ReportsPage() {
                   onClick={() => exportToCSV(exp.id)}
                   className="inline-flex items-center gap-2 rounded-lg bg-gray-800 px-3 py-2 text-sm font-medium text-gray-200 hover:bg-gray-700 transition-colors"
                 >
-                  <FileSpreadsheet className="h-4 w-4" /> CSV
+                  <FileSpreadsheet className="h-4 w-4" /> {t('exportTab.csv')}
                 </button>
                 <button 
                   onClick={() => exportToPDF(exp.id)}
                   className="inline-flex items-center gap-2 rounded-lg bg-brand-500/10 text-brand-400 px-3 py-2 text-sm font-medium hover:bg-brand-500/20 transition-colors"
                 >
-                  <FileText className="h-4 w-4" /> PDF
+                  <FileText className="h-4 w-4" /> {t('exportTab.pdf')}
                 </button>
               </div>
             </div>

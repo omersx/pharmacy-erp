@@ -24,12 +24,33 @@ class PaymentEntryResponse(BaseModel):
     created_at: datetime
     model_config = {"from_attributes": True}
 
+class SalePaymentDetailResponse(BaseModel):
+    id: uuid.UUID
+    sale_id: uuid.UUID
+    invoice_number: str
+    cash_session_id: Optional[uuid.UUID] = None
+    payment_method: str
+    display_name: str
+    amount: Decimal
+    reference: Optional[str] = None
+    employee_name: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+class PaymentGroupSummary(BaseModel):
+    payment_method: str
+    display_name: str
+    total_amount: Decimal
+    transaction_count: int
+    payments: List[SalePaymentDetailResponse] = []
+
 class SaleCreate(BaseModel):
     payment_method: Optional[str] = "CASH"
     payments: Optional[List[PaymentEntryCreate]] = None
     items: List[SaleItemCreate]
     customer_id: Optional[uuid.UUID] = None
     cash_session_id: Optional[uuid.UUID] = None
+    is_invoiced: Optional[bool] = False
 
 class CustomerSimple(BaseModel):
     id: uuid.UUID
@@ -101,6 +122,9 @@ class SaleResponse(BaseModel):
     profit_amount: Optional[Decimal] = Decimal('0.0')
     total_amount: Decimal
     status: str
+    is_invoiced: Optional[bool] = False
+    invoice_status: Optional[str] = "NOT_INVOICED"
+    customer_invoice_id: Optional[uuid.UUID] = None
     payment_method: str
     created_at: datetime
     customer: Optional[CustomerSimple] = None

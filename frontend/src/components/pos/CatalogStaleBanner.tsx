@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/lib/offline/db";
-import { syncCatalog } from "@/lib/offline/catalog-sync";
+import { syncCatalog, subscribeCatalogSync } from "@/lib/offline/catalog-sync";
+import { useCurrentLocale } from "@/hooks/use-locale";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 interface CatalogStaleBannerProps {
   branchId?: string;
@@ -11,6 +13,7 @@ interface CatalogStaleBannerProps {
 }
 
 export function CatalogStaleBanner({ branchId, onSynced }: CatalogStaleBannerProps) {
+  const { isAr } = useCurrentLocale();
   const [staleState, setStaleState] = useState<"fresh" | "warning" | "danger">("fresh");
   const [hoursOld, setHoursOld] = useState<number>(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -45,18 +48,31 @@ export function CatalogStaleBanner({ branchId, onSynced }: CatalogStaleBannerPro
 
   useEffect(() => {
     checkStaleness();
-    const interval = setInterval(checkStaleness, 60_000);
-    return () => clearInterval(interval);
+    const unsubscribe = subscribeCatalogSync((progress) => {
+      if (progress.state === "complete") {
+        checkStaleness();
+      }
+    });
+    const interval = setInterval(checkStaleness, 30_000);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const ok = await syncCatalog(branchId);
+      const ok = await syncCatalog(branchId, { forceBootstrap: true });
       if (ok) {
         await checkStaleness();
         onSynced?.();
+        toast.success(isAr ? "تم تحديث كتالوج وأسعار الأدوية بنجاح" : "Catalog and prices updated successfully");
+      } else {
+        toast.error(isAr ? "تعذر التحديث: الخادم غير متصل أو لا يمكن الوصول إليه" : "Could not sync catalog: Server offline or unreachable");
       }
+    } catch (err: any) {
+      toast.error(err?.message || "Sync failed");
     } finally {
       setIsSyncing(false);
     }
@@ -68,7 +84,7 @@ export function CatalogStaleBanner({ branchId, onSynced }: CatalogStaleBannerPro
 
   return (
     <div
-      className={`px-3 py-1.5 text-xs flex items-center justify-between transition-colors border-b ${
+      className={`px-3 py-1.5 text-xs flex items-center justify-between transition-colors border-b select-none ${
         isDanger
           ? "bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-400"
           : "bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300"
@@ -79,21 +95,35 @@ export function CatalogStaleBanner({ branchId, onSynced }: CatalogStaleBannerPro
         <AlertTriangle size={14} className="shrink-0" />
         <span>
           {isDanger
-            ? `⚠️ تنبيه: بيانات الأدوية والأسعار غير محدثة منذ أكثر من ${hoursOld} ساعة!`
-            : `تنبيه: تم تحديث الكتالوج منذ ${hoursOld} ساعة.`}
+            ? isAr
+              ? `⚠️ تنبيه: بيانات الأدوية والأسعار غير محدثة منذ أكثر من ${hoursOld} ساعة!`
+              : `⚠️ Warning: Offline medicine catalog & prices have not been updated for ${hoursOld} hours!`
+            : isAr
+            ? `تنبيه: تم تحديث الكتالوج منذ ${hoursOld} ساعة.`
+            : `Notice: Local catalog was last synced ${hoursOld} hours ago.`}
         </span>
       </div>
 
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={handleSync}
           disabled={isSyncing}
           className="inline-flex items-center gap-1 font-semibold underline hover:no-underline disabled:opacity-50"
         >
           <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
-          {isSyncing ? "جاري التحديث..." : "تحديث الكتالوج الآن"}
+          <span>
+            {isSyncing
+              ? isAr
+                ? "جاري التحديث..."
+                : "Syncing..."
+              : isAr
+              ? "تحديث الكتالوج الآن"
+              : "Sync Catalog Now"}
+          </span>
         </button>
         <button
+          type="button"
           onClick={() => setDismissed(true)}
           className="p-0.5 hover:opacity-75 transition-opacity"
           aria-label="Dismiss"

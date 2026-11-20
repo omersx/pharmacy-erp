@@ -18,10 +18,24 @@ from app.modules.cash_sessions.schemas import (
     CashSessionResponse,
     CashMovementCreate,
     CashMovementResponse,
-    CashSessionSummary
+    CashSessionSummary,
+    PaymentMethodBreakdown,
+    PreviousSessionResponse
 )
 
 router = APIRouter(tags=["cash-sessions"])
+
+METHOD_NAMES = {
+    "CASH": "Cash",
+    "BANKAK": "Bankak",
+    "FAWRY": "Fawry",
+    "OCASH": "O-Cash",
+    "O_CASH": "O-Cash",
+    "AMIN": "Amin",
+    "CARD": "Card / POS Terminal",
+    "BANK": "Bank Transfer",
+    "BANK_TRANSFER": "Bank Transfer",
+}
 
 async def calculate_session_totals(db: AsyncSession, session: CashSession):
     """Calculates all live financial aggregates for a cash session with split-payment accuracy."""
@@ -131,16 +145,95 @@ async def calculate_session_totals(db: AsyncSession, session: CashSession):
     opening = Decimal(str(session.opening_amount or 0))
     expected = opening + total_cash_sales - total_cash_refunds + total_cash_in - total_cash_out
 
+    # 8. Dynamic Breakdown for ALL Payment Methods (Cash, Bankak, Fawry, O-Cash, etc.)
+    pay_stmt = (
+        select(
+            SalePayment.payment_method,
+            func.coalesce(func.sum(SalePayment.amount), 0).label("total_amount"),
+            func.count(SalePayment.id).label("orders_count")
+        )
+        .join(Sale, Sale.id == SalePayment.sale_id)
+        .where(
+            Sale.cash_session_id == session.id,
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"])
+        )
+        .group_by(SalePayment.payment_method)
+    )
+    pay_rows = (await db.execute(pay_stmt)).all()
+    
+    breakdown_map = {}
+    for pm, tot, cnt in pay_rows:
+        key = (pm or "CASH").upper()
+        breakdown_map[key] = {
+            "expected_amount": Decimal(str(tot or 0)),
+            "orders_count": int(cnt or 0)
+        }
+
+    legacy_stmt = (
+        select(
+            Sale.payment_method,
+            func.coalesce(func.sum(Sale.total_amount), 0).label("total_amount"),
+            func.count(Sale.id).label("orders_count")
+        )
+        .where(
+            Sale.cash_session_id == session.id,
+            Sale.status.in_(["COMPLETED", "PARTIALLY_RETURNED", "RETURNED"]),
+            ~Sale.id.in_(select(SalePayment.sale_id))
+        )
+        .group_by(Sale.payment_method)
+    )
+    leg_rows = (await db.execute(legacy_stmt)).all()
+    for pm, tot, cnt in leg_rows:
+        key = (pm or "CASH").upper()
+        if key in breakdown_map:
+            breakdown_map[key]["expected_amount"] += Decimal(str(tot or 0))
+            breakdown_map[key]["orders_count"] += int(cnt or 0)
+        else:
+            breakdown_map[key] = {
+                "expected_amount": Decimal(str(tot or 0)),
+                "orders_count": int(cnt or 0)
+            }
+
+    # Ensure standard POS methods (matching Odoo: Cash, Bankak, Fawry, O-Cash)
+    standard_methods = ["CASH", "BANKAK", "FAWRY", "OCASH"]
+    for sm in standard_methods:
+        if sm not in breakdown_map:
+            breakdown_map[sm] = {
+                "expected_amount": Decimal(str(total_cash_sales)) if sm == "CASH" else Decimal("0.0"),
+                "orders_count": 0
+            }
+
+    payments_breakdown = []
+    preferred_order = ["CASH", "BANKAK", "FAWRY", "OCASH"]
+    other_keys = sorted([k for k in breakdown_map.keys() if k not in preferred_order])
+    ordered_keys = [k for k in preferred_order if k in breakdown_map] + other_keys
+    gross_sales_amount = Decimal("0.0")
+    for k in ordered_keys:
+        item = breakdown_map[k]
+        gross_sales_amount += item["expected_amount"]
+        display_name = METHOD_NAMES.get(k, k.replace("_", " ").title())
+        payments_breakdown.append(
+            PaymentMethodBreakdown(
+                payment_method=k,
+                display_name=display_name,
+                expected_amount=item["expected_amount"],
+                orders_count=item["orders_count"]
+            )
+        )
+
     return {
         "opening_amount": opening,
         "total_cash_sales": total_cash_sales,
         "total_card_sales": total_card_sales,
         "total_other_sales": total_other_sales,
+        "gross_sales_amount": gross_sales_amount,
         "total_sales_count": total_sales_count,
+        "orders_count": total_sales_count,
         "total_cash_refunds": total_cash_refunds,
         "total_cash_in": total_cash_in,
         "total_cash_out": total_cash_out,
-        "expected_amount": expected
+        "expected_amount": expected,
+        "payments_breakdown": payments_breakdown
     }
 
 @router.post("/open", response_model=CashSessionResponse)
@@ -149,7 +242,7 @@ async def open_session(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    """Open a new cash session. If branch_id is not passed, defaults to the primary branch."""
+    """Open a new cash session with sequential code and optional opening handover notes."""
     query = select(CashSession).where(
         CashSession.cashier_id == current_user.id,
         CashSession.status == "OPEN"
@@ -170,17 +263,28 @@ async def open_session(
 
     terminal = data.terminal_name or "Main Register"
 
+    # Sequential Session Code (e.g. REG/00001 or Main Register/00001)
+    seq_res = await db.execute(select(func.count(CashSession.id)))
+    count_all = int(seq_res.scalar() or 0)
+    session_code = f"REG/{count_all + 1:05d}"
+
     session = CashSession(
+        session_code=session_code,
         branch_id=branch_id,
         cashier_id=current_user.id,
         terminal_name=terminal,
         opening_amount=float(data.opening_amount),
+        opening_notes=data.opening_notes,
         status="OPEN"
     )
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    return session
+    
+    resp = CashSessionResponse.model_validate(session)
+    resp.cashier_name = current_user.full_name or current_user.email
+    resp.cashier_email = current_user.email
+    return resp
 
 @router.post("/{id}/movements", response_model=CashMovementResponse)
 async def add_cash_movement(
@@ -212,16 +316,75 @@ async def add_cash_movement(
     await db.refresh(movement)
     return movement
 
+@router.get("/last-closed", response_model=Optional[PreviousSessionResponse])
+async def get_last_closed_session(
+    terminal_name: Optional[str] = None,
+    branch_id: Optional[UUID] = None,
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Retrieve the most recently closed cash session to populate opening float."""
+    query = select(CashSession).where(CashSession.status == "CLOSED")
+    if terminal_name:
+        query = query.where(CashSession.terminal_name == terminal_name)
+    if branch_id:
+        query = query.where(CashSession.branch_id == branch_id)
+    query = query.order_by(CashSession.closed_at.desc(), CashSession.opened_at.desc()).limit(1)
+    result = await db.execute(query)
+    prev = result.scalars().first()
+    if not prev:
+        return None
+    return PreviousSessionResponse(
+        id=prev.id,
+        session_code=prev.session_code or f"REG/{str(prev.id)[:6].upper()}",
+        terminal_name=prev.terminal_name,
+        closing_amount=Decimal(str(prev.closing_amount or 0)),
+        closed_at=prev.closed_at
+    )
+
+@router.get("/active", response_model=CashSessionResponse)
+async def get_active_session(
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Get the current user's active open cash session, if any."""
+    query = (
+        select(CashSession, User.full_name.label("cashier_name"), User.email.label("cashier_email"))
+        .outerjoin(User, CashSession.cashier_id == User.id)
+        .where(
+            CashSession.cashier_id == current_user.id,
+            CashSession.status == "OPEN"
+        )
+    )
+    result = await db.execute(query)
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="No active session found")
+    session, c_name, c_email = row
+    resp = CashSessionResponse.model_validate(session)
+    resp.cashier_name = c_name or current_user.full_name or "Cashier"
+    resp.cashier_email = c_email or current_user.email
+    if not resp.session_code:
+        resp.session_code = f"REG/{str(session.id)[:6].upper()}"
+    return resp
+
 @router.get("/{id}/summary", response_model=CashSessionSummary)
 async def get_session_summary(
     id: UUID, 
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    """Get real-time financial summary of the cash session."""
-    session = await db.get(CashSession, id)
-    if not session:
+    """Get real-time financial summary of the cash session including multi-tender breakdown."""
+    query = (
+        select(CashSession, User.full_name.label("cashier_name"), User.email.label("cashier_email"))
+        .outerjoin(User, CashSession.cashier_id == User.id)
+        .where(CashSession.id == id)
+    )
+    result = await db.execute(query)
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Session not found")
+    session, c_name, c_email = row
 
     totals = await calculate_session_totals(db, session)
     
@@ -236,19 +399,28 @@ async def get_session_summary(
     )
     movements = mov_res.scalars().all()
 
+    sess_resp = CashSessionResponse.model_validate(session)
+    sess_resp.cashier_name = c_name or "Cashier"
+    sess_resp.cashier_email = c_email
+    if not sess_resp.session_code:
+        sess_resp.session_code = f"REG/{str(session.id)[:6].upper()}"
+
     return CashSessionSummary(
-        session=session,
+        session=sess_resp,
         opening_amount=totals["opening_amount"],
         total_cash_sales=totals["total_cash_sales"],
         total_card_sales=totals["total_card_sales"],
         total_other_sales=totals["total_other_sales"],
+        gross_sales_amount=totals["gross_sales_amount"],
         total_sales_count=totals["total_sales_count"],
+        orders_count=totals["orders_count"],
         total_cash_refunds=totals["total_cash_refunds"],
         total_cash_in=totals["total_cash_in"],
         total_cash_out=totals["total_cash_out"],
         expected_amount=totals["expected_amount"],
         closing_amount=closing,
         variance=variance,
+        payments_breakdown=totals["payments_breakdown"],
         movements=movements
     )
 
@@ -282,23 +454,13 @@ async def close_session(
         
     await db.commit()
     await db.refresh(session)
-    return session
-
-@router.get("/active", response_model=CashSessionResponse)
-async def get_active_session(
-    db: AsyncSession = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
-):
-    """Get the current user's active open cash session, if any."""
-    query = select(CashSession).where(
-        CashSession.cashier_id == current_user.id,
-        CashSession.status == "OPEN"
-    )
-    result = await db.execute(query)
-    session = result.scalars().first()
-    if not session:
-        raise HTTPException(status_code=404, detail="No active session found")
-    return session
+    
+    resp = CashSessionResponse.model_validate(session)
+    resp.cashier_name = current_user.full_name or current_user.email
+    resp.cashier_email = current_user.email
+    if not resp.session_code:
+        resp.session_code = f"REG/{str(session.id)[:6].upper()}"
+    return resp
 
 @router.get("", response_model=List[CashSessionResponse], include_in_schema=False)
 @router.get("/", response_model=List[CashSessionResponse])
@@ -308,13 +470,31 @@ async def list_sessions(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    query = select(CashSession).order_by(CashSession.opened_at.desc())
+    query = (
+        select(
+            CashSession,
+            User.full_name.label("cashier_name"),
+            User.email.label("cashier_email")
+        )
+        .outerjoin(User, CashSession.cashier_id == User.id)
+        .order_by(CashSession.opened_at.desc())
+    )
     if status:
         query = query.where(CashSession.status == status)
     if branch_id:
         query = query.where(CashSession.branch_id == branch_id)
     result = await db.execute(query)
-    return result.scalars().all()
+    rows = result.all()
+    
+    sessions_out = []
+    for s, c_name, c_email in rows:
+        resp = CashSessionResponse.model_validate(s)
+        resp.cashier_name = c_name or "Cashier"
+        resp.cashier_email = c_email
+        if not resp.session_code:
+            resp.session_code = f"REG/{str(s.id)[:6].upper()}"
+        sessions_out.append(resp)
+    return sessions_out
 
 @router.get("/{id}", response_model=CashSessionResponse)
 async def get_session(
@@ -322,7 +502,23 @@ async def get_session(
     db: AsyncSession = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    session = await db.get(CashSession, id)
-    if not session:
+    query = (
+        select(
+            CashSession,
+            User.full_name.label("cashier_name"),
+            User.email.label("cashier_email")
+        )
+        .outerjoin(User, CashSession.cashier_id == User.id)
+        .where(CashSession.id == id)
+    )
+    result = await db.execute(query)
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Session not found")
-    return session
+    session, c_name, c_email = row
+    resp = CashSessionResponse.model_validate(session)
+    resp.cashier_name = c_name or "Cashier"
+    resp.cashier_email = c_email
+    if not resp.session_code:
+        resp.session_code = f"REG/{str(session.id)[:6].upper()}"
+    return resp

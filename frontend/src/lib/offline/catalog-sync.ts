@@ -55,7 +55,7 @@ export async function syncCatalog(
         const deltaUrl = `/api/v1/catalog/delta?since=${encodeURIComponent(
           String(existingCursor.value)
         )}${branchId ? `&branch_id=${branchId}` : ""}`;
-        const res = await fetch(deltaUrl, { cache: "no-store" });
+        const res = await fetch(deltaUrl, { cache: "no-store", credentials: "include" });
         if (res.ok) {
           const deltaData = await res.json();
           await applyDelta(deltaData);
@@ -76,7 +76,7 @@ export async function syncCatalog(
     try {
       const res = await fetch(
         `/api/v1/catalog/bootstrap${branchId ? `?branch_id=${branchId}` : ""}`,
-        { cache: "no-store" }
+        { cache: "no-store", credentials: "include" }
       );
       if (res.ok) {
         bootstrapData = await res.json();
@@ -227,7 +227,7 @@ async function applyBootstrap(data: {
 }
 
 async function fallbackSyncFromExistingEndpoints() {
-  const res = await fetch("/api/v1/medicines?limit=2000", { cache: "no-store" });
+  const res = await fetch("/api/v1/medicines?limit=2000", { cache: "no-store", credentials: "include" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const items = await res.json();
   const list = Array.isArray(items) ? items : items.items || [];

@@ -13,11 +13,31 @@ export function formatMoney(amount: number, currency: string = 'SDG'): string {
 }
 
 export function formatDate(date: string | Date, locale: string = 'en'): string {
-  return new Intl.DateTimeFormat(locale, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(date));
+  if (!date) return '-';
+  try {
+    return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SD' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(date));
+  } catch {
+    return String(date);
+  }
+}
+
+export function formatDateTime(date: string | Date, locale: string = 'en'): string {
+  if (!date) return '-';
+  try {
+    return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-SD' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(date));
+  } catch {
+    return String(date);
+  }
 }
 
 export function formatNumber(num: number, locale: string = 'en'): string {

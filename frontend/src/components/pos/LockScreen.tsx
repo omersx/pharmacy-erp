@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/store/auth-store';
 import { verifyUserPin, hasUserPin } from '@/lib/offline/crypto';
+import { useCurrentLocale } from '@/hooks/use-locale';
 import { SetPinModal } from './SetPinModal';
 import { Lock, Unlock, Delete, RotateCcw, LogOut, KeyRound, ShieldAlert } from 'lucide-react';
 import { useRouter } from '@/i18n/routing';
@@ -14,6 +15,7 @@ interface LockScreenProps {
 }
 
 export function LockScreen({ isLocked, onUnlock }: LockScreenProps) {
+  const { isAr } = useCurrentLocale();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
@@ -59,23 +61,29 @@ export function LockScreen({ isLocked, onUnlock }: LockScreenProps) {
     try {
       const valid = await verifyUserPin(user.id, pinToTest);
       if (valid) {
-        toast.success('🔓 Terminal unlocked', { id: 'unlocked-toast' });
+        toast.success(isAr ? '🔓 تم إلغاء القفل بنجاح' : '🔓 Terminal unlocked', { id: 'unlocked-toast' });
         setPin('');
         onUnlock();
       } else {
         setIsShaking(true);
-        setErrorMessage('Incorrect PIN. Please try again.');
+        setErrorMessage(
+          isAr
+            ? 'رمز PIN غير صحيح. يرجى المحاولة مرة أخرى.'
+            : 'Incorrect PIN. Please try again.'
+        );
         setTimeout(() => {
           setIsShaking(false);
           setPin('');
         }, 600);
       }
     } catch (err: any) {
-      setErrorMessage('Verification failed: ' + (err?.message || 'Error'));
+      setErrorMessage(
+        (isAr ? 'فشل التحقق: ' : 'Verification failed: ') + (err?.message || 'Error')
+      );
     } finally {
       setIsVerifying(false);
     }
-  }, [user?.id, onUnlock]);
+  }, [user?.id, onUnlock, isAr]);
 
   const handleDigit = useCallback((digit: string) => {
     if (isVerifying || pin.length >= 6) return;

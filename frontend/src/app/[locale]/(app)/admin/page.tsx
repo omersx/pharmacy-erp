@@ -13,10 +13,12 @@ import {
   Settings, Info, Plus, Edit, Trash2, Search, ChevronRight,
   UserCheck, UserX, Mail, Phone, Key, Globe, Clock, Bell,
   Database, CheckCircle2, XCircle, Download, Upload, Calendar,
-  Lock, Eye, EyeOff, AlertTriangle, RefreshCw, Zap, Heart
+  Lock, Eye, EyeOff, AlertTriangle, RefreshCw, Zap, Heart,
+  Store, Boxes, Package
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
+import { useCurrentLocale } from '@/hooks/use-locale';
 
 // ─── Tab Configuration ──────────────────────────────────────────────────
 const TABS = [
@@ -73,7 +75,8 @@ const PERMISSION_MODULES = [
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
 export default function SettingsPage() {
-  const { currency, setCurrency } = useAppStore();
+  const { isAr } = useCurrentLocale();
+  const { currency, setCurrency, inventoryMode, setInventoryMode } = useAppStore();
   const [activeTab, setActiveTab] = useState<TabId>('users');
   
   // ── Users State ──
@@ -216,6 +219,56 @@ export default function SettingsPage() {
       toast.error(e.message || 'Failed to create backup');
     } finally {
       setCreatingBackup(false);
+    }
+  };
+
+  // Stock snapshot backup state & handler
+  const [exportingStockFormat, setExportingStockFormat] = useState<'xlsx' | 'csv' | null>(null);
+  const [restoringStock, setRestoringStock] = useState(false);
+  const restoreStockInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleExportStock = async (format: 'xlsx' | 'csv') => {
+    setExportingStockFormat(format);
+    try {
+      await api.exportInventoryStock(format);
+      toast.success(
+        isAr 
+          ? `تم تنزيل ملف المخزون (${format.toUpperCase()}) بنجاح` 
+          : `Inventory stock file (${format.toUpperCase()}) downloaded successfully`
+      );
+    } catch (err: any) {
+      toast.error(
+        err.message || (isAr ? 'فشل تصدير بيانات المخزون' : 'Failed to export inventory stock')
+      );
+    } finally {
+      setExportingStockFormat(null);
+    }
+  };
+
+  const handleRestoreStock = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fname = file.name.toLowerCase();
+    if (!fname.endsWith('.xlsx') && !fname.endsWith('.xls') && !fname.endsWith('.csv')) {
+      toast.error(isAr ? 'يرجى اختيار ملف Excel (.xlsx) أو CSV' : 'Please select an Excel (.xlsx) or CSV file');
+      return;
+    }
+
+    setRestoringStock(true);
+    try {
+      const res = await api.restoreStockFromExcel(file, undefined, inventoryMode);
+      toast.success(
+        isAr 
+          ? `تم تحديث واستعادة أرصدة ${res.updated_count} صنف من ملف الإكسل بنجاح!` 
+          : `Successfully updated stock for ${res.updated_count} medicines from Excel!`
+      );
+    } catch (err: any) {
+      toast.error(
+        err.message || (isAr ? 'فشل استعادة أرصدة المخزون من الملف' : 'Failed to restore stock from file')
+      );
+    } finally {
+      setRestoringStock(false);
+      e.target.value = '';
     }
   };
 
@@ -797,40 +850,109 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground">Manage database backups and restore points</p>
         </div>
 
-        {/* Action Cards */}
-        <div className="grid grid-cols-2 gap-4">
-          <button
-            onClick={handleCreateBackup}
-            disabled={creatingBackup}
-            className="flex items-center gap-4 rounded-xl border border-border bg-background/50 p-5 hover:border-brand-500/30 hover:bg-brand-500/5 transition-all group disabled:opacity-50"
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-brand-500/10 text-brand-400 group-hover:bg-brand-500/20 transition-colors">
-              {creatingBackup ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-            </div>
-            <div className="text-left">
-              <h3 className="font-semibold text-foreground">{creatingBackup ? 'Creating...' : 'Create Backup'}</h3>
-              <p className="text-xs text-muted-foreground">Export database snapshot now</p>
-            </div>
-          </button>
-          <button
-            onClick={() => restoreInputRef.current?.click()}
-            className="flex items-center gap-4 rounded-xl border border-border bg-background/50 p-5 hover:border-amber-500/30 hover:bg-amber-500/5 transition-all group"
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20 transition-colors">
-              <Upload className="h-5 w-5" />
-            </div>
-            <div className="text-left">
-              <h3 className="font-semibold text-foreground">Restore Backup</h3>
-              <p className="text-xs text-muted-foreground">Restore from a backup file</p>
-            </div>
-          </button>
-          <input
-            ref={restoreInputRef}
-            type="file"
-            accept=".db"
-            onChange={handleRestoreBackup}
-            className="hidden"
-          />
+        {/* Database Backup & Restore */}
+        <div>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            {isAr ? 'قاعدة البيانات والنظام' : 'Database Snapshot'}
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              onClick={handleCreateBackup}
+              disabled={creatingBackup}
+              className="flex items-center gap-4 rounded-xl border border-border bg-background/50 p-5 hover:border-brand-500/30 hover:bg-brand-500/5 transition-all group disabled:opacity-50 text-left rtl:text-right"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-500/10 text-brand-400 group-hover:bg-brand-500/20 transition-colors">
+                {creatingBackup ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Database className="h-5 w-5" />}
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">
+                  {creatingBackup ? (isAr ? 'جاري الإنشاء...' : 'Creating...') : (isAr ? 'نسخ احتياطي لقاعدة البيانات' : 'Create Backup')}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {isAr ? 'تصدير لقطة كاملة لقاعدة البيانات (.db)' : 'Export database snapshot now (.db)'}
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => restoreInputRef.current?.click()}
+              className="flex items-center gap-4 rounded-xl border border-border bg-background/50 p-5 hover:border-amber-500/30 hover:bg-amber-500/5 transition-all group text-left rtl:text-right"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20 transition-colors">
+                <Upload className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">
+                  {isAr ? 'استعادة قاعدة البيانات' : 'Restore Backup'}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {isAr ? 'استعادة من ملف نسخة احتياطية (.db)' : 'Restore from a backup file (.db)'}
+                </p>
+              </div>
+            </button>
+            <input
+              ref={restoreInputRef}
+              type="file"
+              accept=".db"
+              onChange={handleRestoreBackup}
+              className="hidden"
+            />
+          </div>
+        </div>
+
+        {/* Stock & Inventory Data Export & Restore */}
+        <div>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            {isAr ? 'أرصدة المخزون (الرف والمستودع)' : 'Inventory Stock Data'}
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              onClick={() => handleExportStock('xlsx')}
+              disabled={exportingStockFormat !== null}
+              className="flex items-center gap-4 rounded-xl border border-border bg-background/50 p-5 hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all group disabled:opacity-50 text-left rtl:text-right"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
+                {exportingStockFormat === 'xlsx' ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">
+                  {exportingStockFormat === 'xlsx' 
+                    ? (isAr ? 'جاري التصدير...' : 'Exporting...') 
+                    : (isAr ? 'تصدير المخزون (Excel)' : 'Export Stock (Excel)')}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {isAr ? 'تنزيل أرصدة الرف والمستودع والتقييم (.xlsx)' : 'Download Shelf & Warehouse stock balances (.xlsx)'}
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => restoreStockInputRef.current?.click()}
+              disabled={restoringStock}
+              className="flex items-center gap-4 rounded-xl border border-border bg-background/50 p-5 hover:border-teal-500/30 hover:bg-teal-500/5 transition-all group disabled:opacity-50 text-left rtl:text-right"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400 group-hover:bg-teal-500/20 transition-colors">
+                {restoringStock ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">
+                  {restoringStock 
+                    ? (isAr ? 'جاري الاستعادة...' : 'Restoring...') 
+                    : (isAr ? 'استعادة وتحديث المخزون (Excel)' : 'Restore Stock (Excel)')}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {isAr ? 'رفع ملف إكسل وتحديث أرصدة الرف والمستودع' : 'Upload Excel file to update shelf & warehouse stock'}
+                </p>
+              </div>
+            </button>
+            <input
+              ref={restoreStockInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleRestoreStock}
+              className="hidden"
+            />
+          </div>
         </div>
 
         {/* Backup History */}
@@ -1125,6 +1247,101 @@ export default function SettingsPage() {
                   { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
                   { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
                 ]} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Inventory Operating Mode (Simple vs Multi-Location) */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <Package className="h-4 w-4 text-brand-500" />
+              <span>{isAr ? 'نمط إدارة المخزون (الرفوف vs المستودع)' : 'Inventory Operating Mode (Shelf vs. Warehouse)'}</span>
+            </div>
+            <span className={cn(
+              "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border",
+              inventoryMode === 'simple'
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+            )}>
+              {inventoryMode === 'simple' ? (isAr ? 'النمط البسيط نشط' : 'Simple Mode Active') : (isAr ? 'نمط المستودع نشط' : 'Multi-Location Active')}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Simple Mode */}
+            <div
+              onClick={() => {
+                setInventoryMode('simple');
+                toast.success(isAr ? 'تم تفعيل النمط البسيط (رف العرض فقط)' : 'Simple Mode (Single Shelf) activated');
+              }}
+              className={cn(
+                "p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between",
+                inventoryMode === 'simple'
+                  ? "border-emerald-500 bg-emerald-500/5 shadow-sm"
+                  : "border-border bg-background/50 hover:bg-surface-hover/50"
+              )}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    {isAr ? 'موصى به للصيدليات الصغيرة' : 'For Small Stores'}
+                  </span>
+                  {inventoryMode === 'simple' && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                </div>
+                <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                  <Store size={16} className="text-emerald-500" />
+                  {isAr ? 'النمط البسيط (رف العرض فقط)' : 'Simple Mode (Single Shelf)'}
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                  {isAr
+                    ? 'رقم مخزون واحد مباشر. إخفاء تبويب تعبئة الرفوف والمخزن الخلفي لسرعة وسهولة العمل اليومي.'
+                    : 'Single direct stock count. Hides Shelf Refill queues and Back Store counts for an effortless workflow.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Multi-Location Mode */}
+            <div
+              onClick={async () => {
+                if (inventoryMode === 'simple') {
+                  try {
+                    await api.consolidateStockToShelf();
+                  } catch (e) {
+                    console.warn(e);
+                  }
+                }
+                setInventoryMode('multi_location');
+                toast.success(
+                  isAr 
+                    ? 'تم تفعيل نمط متعدد المواقع! (المستودع مهيأ على صفر 0، وكامل المخزون على الرف)' 
+                    : 'Multi-Location Mode activated! (Warehouse initialized to 0, all stock on Shelf)'
+                );
+              }}
+              className={cn(
+                "p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between",
+                inventoryMode === 'multi_location'
+                  ? "border-blue-500 bg-blue-500/5 shadow-sm"
+                  : "border-border bg-background/50 hover:bg-surface-hover/50"
+              )}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                    {isAr ? 'للصيدليات الكبيرة والمستشفيات' : 'For Hospital & Large Branches'}
+                  </span>
+                  {inventoryMode === 'multi_location' && <CheckCircle2 className="h-4 w-4 text-blue-500" />}
+                </div>
+                <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
+                  <Boxes size={16} className="text-blue-500" />
+                  {isAr ? 'نمط متعدد المواقع (الرف + المستودع)' : 'Multi-Location Mode (Shelf + Back Store)'}
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                  {isAr
+                    ? 'فصل رصيد الرف 🟢 عن المستودع 📦 مع مساحة عمل تعبئة الرفوف وقوائم السحب لأمين المخزن.'
+                    : 'Separates Front Shelf 🟢 from Warehouse 📦 reserves. Enables Shelf Refill queues and pick-lists.'}
+                </p>
               </div>
             </div>
           </div>

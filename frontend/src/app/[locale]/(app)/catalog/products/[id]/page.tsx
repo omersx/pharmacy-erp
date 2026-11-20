@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/app-store';
-import { ArrowLeft, Plus, Edit, Ban, Package, Activity, DollarSign, Calendar, Archive, Barcode, Trash2, CheckCircle2, AlertCircle, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Edit, Ban, Package, Activity, DollarSign, Calendar, Archive, Barcode, Trash2, CheckCircle2, AlertCircle, Copy, Check, History, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { SlideOver } from '@/components/ui/slide-over';
@@ -20,6 +20,7 @@ export default function MedicineDetailPage({ params }: { params: Promise<{ id: s
   const [medicine, setMedicine] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currency } = useAppStore();
 
@@ -77,14 +78,16 @@ export default function MedicineDetailPage({ params }: { params: Promise<{ id: s
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [medRes, catsRes, suppsRes] = await Promise.all([
+      const [medRes, catsRes, suppsRes, movRes] = await Promise.all([
         api.getMedicine(id),
         api.getCategoryTree().catch(() => []),
-        api.getSuppliers().catch(() => [])
+        api.getSuppliers().catch(() => []),
+        api.getMovements({ medicine_id: id }).catch(() => [])
       ]);
       setMedicine(medRes);
       setCategories(catsRes as any[]);
       setSuppliers(suppsRes as any[]);
+      setMovements(Array.isArray(movRes) ? movRes : []);
     } catch (error: any) {
       toast.error(error.message || 'Failed to load medicine details');
     } finally {
@@ -636,6 +639,96 @@ export default function MedicineDetailPage({ params }: { params: Promise<{ id: s
                       </td>
                     </tr>
                   ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Product Moves & Traceability History (Odoo stock.move parity) */}
+        <div className="rounded-xl border border-border bg-surface shadow-sm mt-6">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <History className="h-5 w-5 text-brand-400" />
+                Product Moves & Stock Traceability
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Complete audit trail of all physical stock movements (sales, purchases, returns, adjustments) for this medicine.
+              </p>
+            </div>
+            <span className="text-xs text-muted-foreground font-semibold bg-background border border-border px-2.5 py-1 rounded-full">
+              {movements.length} {movements.length === 1 ? 'move' : 'moves'}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-foreground">
+              <thead className="bg-background text-xs uppercase text-muted-foreground border-b border-border">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Date & Time</th>
+                  <th className="px-6 py-4 font-semibold">Movement Type</th>
+                  <th className="px-6 py-4 font-semibold">Batch</th>
+                  <th className="px-6 py-4 font-semibold text-right">Quantity</th>
+                  <th className="px-6 py-4 font-semibold">Reference Document</th>
+                  <th className="px-6 py-4 font-semibold">Performed By</th>
+                  <th className="px-6 py-4 font-semibold">Audit Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {movements.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
+                      No stock movements recorded for this medicine yet.
+                    </td>
+                  </tr>
+                ) : (
+                  movements.map((m: any) => {
+                    const qty = Number(m.quantity);
+                    const isPositive = qty > 0;
+
+                    return (
+                      <tr key={m.id} className="transition-colors hover:bg-gray-800/40">
+                        <td className="px-6 py-4 text-xs text-muted-foreground">
+                          {m.created_at ? format(new Date(m.created_at), 'dd MMM yyyy, hh:mm a') : '-'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={cn(
+                            "px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1",
+                            isPositive
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                              : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                          )}>
+                            {isPositive ? <ArrowDownCircle size={12} /> : <ArrowUpCircle size={12} />}
+                            {m.movement_type.replace('ADJUSTMENT_', '')}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs text-muted-foreground">
+                          {m.batch_number || '—'}
+                        </td>
+                        <td className="px-6 py-4 text-right font-extrabold text-sm">
+                          <span className={isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
+                            {isPositive ? '+' : ''}{qty}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-xs text-brand-400">
+                          {m.reference_id ? (
+                            <span className="font-mono bg-brand-500/10 px-2 py-0.5 rounded border border-brand-500/20">
+                              {m.reference_type ? `${m.reference_type}: ` : ''}{m.reference_id}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-foreground/80">
+                          {m.user_name || 'System'}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-muted-foreground max-w-xs truncate" title={m.notes || ''}>
+                          {m.notes || '—'}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

@@ -5,9 +5,11 @@ import { TopBar } from '@/components/ui/topbar';
 import { AuthGuard } from '@/components/auth-guard';
 import { ConnectionBadge } from '@/components/pwa/ConnectionBadge';
 import { InstallButton } from '@/components/pwa/InstallButton';
+import { useCurrentLocale } from '@/hooks/use-locale';
 import { useEffect, useState } from 'react';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const { isAr } = useCurrentLocale();
   const sidebarOpen = useAppStore(state => state.sidebarOpen);
   const toggleSidebar = useAppStore(state => state.toggleSidebar);
   const theme = useAppStore(state => state.theme);
@@ -48,14 +50,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </main>
           
           {/* Status Bar */}
-          <footer className="h-8 border-t bg-background flex items-center px-4 text-xs text-gray-500 justify-between">
+          <footer className="h-8 border-t bg-background flex items-center px-4 text-xs text-gray-500 justify-between select-none">
             <div className="flex items-center gap-4">
               <ConnectionBadge />
-              <span>Branch: Main Branch</span>
+              <span>{isAr ? "الفرع: الفرع الرئيسي" : "Branch: Main Branch"}</span>
             </div>
             <div className="flex items-center gap-3">
               <InstallButton />
-              <span>Version 1.3.4</span>
+              <span>{isAr ? "الإصدار 1.3.4" : "Version 1.3.4"}</span>
             </div>
           </footer>
         </div>

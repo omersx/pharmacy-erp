@@ -6,7 +6,8 @@ from app.modules.medicines.models import MedicineBatch
 from app.modules.sales.models import Sale, SaleItem, SaleReturn, SaleReturnItem, SalePayment
 from app.modules.sales.schemas import SaleCreate, SaleReturnCreate
 from app.modules.cash_sessions.models import CashSession
-from app.modules.inventory.models import InventoryMovement
+from app.modules.inventory.models import InventoryMovement, StockLocation, BatchLocationStock
+from app.modules.inventory.location_service import get_or_create_default_locations
 from app.core.exceptions import ValidationError
 from typing import Optional
 import uuid
@@ -36,6 +37,8 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
     total_profit = Decimal('0.0')
     sale_items = []
     movements = []
+
+    shelf_loc, wh_loc = await get_or_create_default_locations(db, branch_id)
 
     # Check if DB dialect supports row locking
     is_sqlite = False
@@ -86,6 +89,50 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
             if new_batch_qty == 0:
                 batch.status = "OUT_OF_STOCK"
 
+            # Sync Location Stock: Deduct from Shelf (or auto-pull from Warehouse if deficit)
+            shelf_stock_stmt = select(BatchLocationStock).where(
+                BatchLocationStock.batch_id == batch.id,
+                BatchLocationStock.location_id == shelf_loc.id
+            )
+            shelf_res = await db.execute(shelf_stock_stmt)
+            shelf_stock = shelf_res.scalars().first()
+            shelf_qty = Decimal(str(shelf_stock.quantity if shelf_stock else 0))
+
+            if shelf_qty >= take_qty:
+                if shelf_stock:
+                    shelf_stock.quantity = float(shelf_qty - take_qty)
+            else:
+                deficit = take_qty - shelf_qty
+                if shelf_stock:
+                    shelf_stock.quantity = 0.0
+
+                # Auto-pull deficit from Warehouse if stock exists there
+                wh_stock_stmt = select(BatchLocationStock).where(
+                    BatchLocationStock.batch_id == batch.id,
+                    BatchLocationStock.location_id == wh_loc.id
+                )
+                wh_res = await db.execute(wh_stock_stmt)
+                wh_stock = wh_res.scalars().first()
+                if wh_stock:
+                    wh_qty = Decimal(str(wh_stock.quantity))
+                    pull_qty = min(wh_qty, deficit)
+                    wh_stock.quantity = float(wh_qty - pull_qty)
+                    if pull_qty > 0:
+                        movements.append(InventoryMovement(
+                            medicine_id=item.medicine_id,
+                            batch_id=batch.id,
+                            branch_id=branch_id,
+                            movement_type="INTERNAL_TRANSFER",
+                            quantity=float(pull_qty),
+                            unit_cost=float(unit_cost if 'unit_cost' in locals() else batch.purchase_price or 0),
+                            reference_type="AUTO_POS_REFILL",
+                            reference_id=f"{wh_loc.code or 'WH'}->{shelf_loc.code or 'SH'}",
+                            notes="Auto-refilled from warehouse to cover counter dispense",
+                            created_by=cashier_id,
+                            from_location_id=wh_loc.id,
+                            to_location_id=shelf_loc.id
+                        ))
+
             # Financial snapshots
             line_total = take_qty * Decimal(str(item.unit_price))
             unit_cost = Decimal(str(batch.purchase_price or 0))
@@ -117,7 +164,8 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
                 movement_type="SALE_OUT",
                 quantity=-float(take_qty),
                 unit_cost=float(unit_cost),
-                created_by=cashier_id
+                created_by=cashier_id,
+                from_location_id=shelf_loc.id
             )
             movements.append(movement)
 
@@ -188,7 +236,9 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
         total_amount=float(total_amount),
         payment_method=overall_payment_method,
         customer_id=sale_data.customer_id,
-        cash_session_id=session_id
+        cash_session_id=session_id,
+        is_invoiced=False,
+        invoice_status="NOT_INVOICED"
     )
     db.add(sale)
     await db.flush()
@@ -202,10 +252,18 @@ async def create_sale(db: AsyncSession, sale_data: SaleCreate, branch_id: uuid.U
         db.add(si)
 
     for mv in movements:
-        mv.reference_id = str(sale.id)
-        mv.reference_type = "SALE"
-        mv.notes = f"Sale invoice {invoice_number}"
+        if not mv.reference_id:
+            mv.reference_id = str(sale.id)
+        if not mv.reference_type:
+            mv.reference_type = "SALE"
+        if not mv.notes:
+            mv.notes = f"Sale invoice {invoice_number}"
         db.add(mv)
+
+    if getattr(sale_data, "is_invoiced", False):
+        await db.flush()
+        from app.modules.invoicing.service import create_invoice_from_pos_sale
+        await create_invoice_from_pos_sale(db, sale.id, cashier_id, customer_id=sale_data.customer_id)
 
     await db.commit()
     return await get_sale_by_id(db, sale.id)
@@ -226,6 +284,7 @@ async def return_sale(
     if sale.status == "RETURNED":
         raise ValidationError(f"Invoice {sale.invoice_number} is already fully returned")
         
+    shelf_loc, _ = await get_or_create_default_locations(db, sale.branch_id)
     items_result = await db.execute(select(SaleItem).where(SaleItem.sale_id == sale_id))
     sale_items = items_result.scalars().all()
     sale_items_by_id = {item.id: item for item in sale_items}
@@ -299,6 +358,22 @@ async def return_sale(
                     if batch.status == "OUT_OF_STOCK" and batch.quantity_remaining > 0:
                         batch.status = "ACTIVE"
 
+                    # Restore location balance on the front shelf
+                    shelf_stmt = select(BatchLocationStock).where(
+                        BatchLocationStock.batch_id == batch.id,
+                        BatchLocationStock.location_id == shelf_loc.id
+                    )
+                    shelf_res = await db.execute(shelf_stmt)
+                    shelf_stock = shelf_res.scalars().first()
+                    if shelf_stock:
+                        shelf_stock.quantity = float(Decimal(str(shelf_stock.quantity)) + qty_requested)
+                    else:
+                        db.add(BatchLocationStock(
+                            batch_id=batch.id,
+                            location_id=shelf_loc.id,
+                            quantity=float(qty_requested)
+                        ))
+
                 # Log restock movement
                 mv = InventoryMovement(
                     medicine_id=sale_item.medicine_id,
@@ -310,7 +385,8 @@ async def return_sale(
                     created_by=cashier_id,
                     reference_id=str(sale.id),
                     reference_type="SALE_RETURN",
-                    notes=f"Return of {qty_requested} units from invoice {sale.invoice_number} (Condition: {cond})"
+                    notes=f"Return of {qty_requested} units from invoice {sale.invoice_number} (Condition: {cond})",
+                    to_location_id=shelf_loc.id
                 )
                 db.add(mv)
             else:

@@ -15,9 +15,11 @@ import { Search, Plus, Edit, Trash2, Package, Pill, Beaker, Tag, DollarSign, Arc
 import { BulkImportModal } from '@/components/ui/bulk-import-modal';
 import { cn } from '@/lib/utils';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useAppStore } from '@/store/app-store';
 
 export default function ProductsPage() {
+  const t = useTranslations('catalog');
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -238,22 +240,48 @@ export default function ProductsPage() {
     }
   };
 
-    const getCategoryName = (id: string) => {
+  const getCategoryName = (id: string) => {
     for (const c1 of categories) {
-      if (c1.id === id) return c1.name_en;
+      if (c1.id === id) return (locale === 'ar' && c1.name_ar) ? c1.name_ar : c1.name_en;
       if (c1.children) {
         for (const c2 of c1.children) {
-          if (c2.id === id) return c2.name_en;
+          if (c2.id === id) return (locale === 'ar' && c2.name_ar) ? c2.name_ar : c2.name_en;
         }
       }
     }
-    return 'Uncategorized';
+    return t('uncategorized');
+  };
+
+  const getDosageFormLabel = (val?: string) => {
+    if (!val) return '';
+    const item = DOSAGE_FORMS.find(d => d.value.toLowerCase() === val.toLowerCase());
+    if (!item) return val.replace('_', ' ');
+    return locale === 'ar' ? item.label_ar : item.label_en;
+  };
+
+  const getBaseUnitLabel = (val?: string) => {
+    if (!val) return locale === 'ar' ? 'وحدة' : 'Unit';
+    const item = BASE_UNITS.find(u => u.value.toLowerCase() === val.toLowerCase() || u.label_en.toLowerCase() === val.toLowerCase());
+    if (item) return locale === 'ar' ? item.label_ar : item.label_en;
+    const l = val.toLowerCase();
+    if (locale === 'ar') {
+      if (l.includes('box')) return 'علبة';
+      if (l.includes('pack')) return 'عبوة';
+      if (l.includes('bottle')) return 'زجاجة';
+      if (l.includes('unit') || l.includes('piece')) return 'وحدة';
+      if (l.includes('strip')) return 'شريط';
+      if (l.includes('tablet')) return 'قرص';
+      if (l.includes('capsule')) return 'كبسولة';
+      if (l.includes('drop')) return 'قطرات';
+    }
+    return val;
   };
 
   const filteredMedicines = useMemo(() => {
     return medicines.filter(med => {
       const matchSearch = search.toLowerCase() === '' || 
         med.name_en?.toLowerCase().includes(search.toLowerCase()) || 
+        med.name_ar?.toLowerCase().includes(search.toLowerCase()) || 
         med.sku?.toLowerCase().includes(search.toLowerCase()) || 
         med.barcode?.toLowerCase().includes(search.toLowerCase());
       
@@ -280,11 +308,11 @@ export default function ProductsPage() {
       <header className="flex-none rounded-xl border border-border bg-surface p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Medicine Catalog</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
             <div className="flex items-center gap-3 mt-1">
-              <p className="text-sm text-muted-foreground">Manage medicines, pricing, and initial stock</p>
+              <p className="text-sm text-muted-foreground">{t('subtitle')}</p>
               <div className="flex items-center rounded-full bg-blue-500/10 px-2.5 py-0.5 text-xs font-medium text-blue-400 ring-1 ring-inset ring-blue-500/20">
-                {medicines.length} Total Items
+                {t('totalItems', { count: medicines.length })}
               </div>
             </div>
           </div>
@@ -294,14 +322,14 @@ export default function ProductsPage() {
               className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-transparent px-4 text-sm font-medium text-foreground transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#0B1220] gap-2"
             >
               <Upload className="h-4 w-4" />
-              Import
+              {t('import')}
             </button>
             <button 
               onClick={openAdd}
               className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-foreground transition-colors hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 focus:ring-offset-[#0B1220] gap-2 shadow-lg shadow-brand-500/20"
             >
               <Plus className="h-4 w-4" />
-              Add Product
+              {t('addProduct')}
             </button>
           </div>
         </div>
@@ -309,20 +337,20 @@ export default function ProductsPage() {
         {/* Filters */}
         <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input 
               type="text"
-              placeholder="Search by name, SKU, or barcode..."
+              placeholder={t('searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-10 w-full rounded-lg border border-border bg-background pl-10 pr-4 text-sm text-foreground placeholder-gray-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="h-10 w-full rounded-lg border border-border bg-background pl-10 pr-4 rtl:pl-4 rtl:pr-10 text-sm text-foreground placeholder-gray-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
           <div className="flex items-center gap-3">
             <Select 
               value={categoryFilter}
               onChange={setCategoryFilter}
-              options={[{value: 'all', label: 'All Categories'}, ...level1Cats.map(c => ({value: c.id, label: c.name_en}))]}
+              options={[{value: 'all', label: t('allCategories')}, ...level1Cats.map(c => ({value: c.id, label: (locale === 'ar' && c.name_ar) ? c.name_ar : c.name_en}))]}
               className="w-[200px]"
             />
             <div className="flex items-center rounded-lg border border-border bg-background p-1">
@@ -330,19 +358,19 @@ export default function ProductsPage() {
                 onClick={() => setStatusFilter('all')}
                 className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-colors", statusFilter === 'all' ? "bg-gray-700 text-foreground" : "text-muted-foreground hover:text-foreground")}
               >
-                All
+                {t('all')}
               </button>
               <button 
                 onClick={() => setStatusFilter('active')}
                 className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-colors", statusFilter === 'active' ? "bg-brand-500/20 text-brand-400" : "text-muted-foreground hover:text-foreground")}
               >
-                Active
+                {t('active')}
               </button>
               <button 
                 onClick={() => setStatusFilter('inactive')}
                 className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-colors", statusFilter === 'inactive' ? "bg-gray-700 text-foreground" : "text-muted-foreground hover:text-foreground")}
               >
-                Inactive
+                {t('inactive')}
               </button>
             </div>
           </div>
@@ -353,16 +381,16 @@ export default function ProductsPage() {
       <main className="flex-1">
         <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-foreground">
+            <table className="w-full text-left rtl:text-right text-sm text-foreground">
               <thead className="bg-background text-xs uppercase text-muted-foreground border-b border-border">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">Product Name</th>
-                  <th className="px-6 py-4 font-semibold">SKU / Barcode</th>
-                  <th className="px-6 py-4 font-semibold">Category</th>
-                  <th className="px-6 py-4 font-semibold">Price ({currency})</th>
-                  <th className="px-6 py-4 font-semibold">Stock</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                  <th className="px-6 py-4 font-semibold text-left rtl:text-right">{t('table.productName')}</th>
+                  <th className="px-6 py-4 font-semibold text-left rtl:text-right">{t('table.skuBarcode')}</th>
+                  <th className="px-6 py-4 font-semibold text-left rtl:text-right">{t('table.category')}</th>
+                  <th className="px-6 py-4 font-semibold text-left rtl:text-right">{t('table.price', { currency })}</th>
+                  <th className="px-6 py-4 font-semibold text-left rtl:text-right">{t('table.stock')}</th>
+                  <th className="px-6 py-4 font-semibold text-left rtl:text-right">{t('table.status')}</th>
+                  <th className="px-6 py-4 font-semibold text-right rtl:text-left">{t('table.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
@@ -375,7 +403,7 @@ export default function ProductsPage() {
                       <td className="px-6 py-4"><div className="h-4 bg-gray-800 rounded w-1/3"></div></td>
                       <td className="px-6 py-4"><div className="h-4 bg-gray-800 rounded w-1/4"></div></td>
                       <td className="px-6 py-4"><div className="h-4 bg-gray-800 rounded w-1/3"></div></td>
-                      <td className="px-6 py-4"><div className="h-4 bg-gray-800 rounded w-8 ml-auto"></div></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-gray-800 rounded w-8 ml-auto rtl:mr-auto"></div></td>
                     </tr>
                   ))
                 ) : filteredMedicines.length === 0 ? (
@@ -383,10 +411,10 @@ export default function ProductsPage() {
                     <td colSpan={7} className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <Package className="h-12 w-12 text-gray-600 mb-4" />
-                        <h3 className="text-lg font-medium text-foreground">No products found</h3>
-                        <p className="text-sm text-muted-foreground mt-1 max-w-sm">Get started by adding a new product to your catalog or adjust your filters.</p>
+                        <h3 className="text-lg font-medium text-foreground">{t('table.noProductsFound')}</h3>
+                        <p className="text-sm text-muted-foreground mt-1 max-w-sm">{t('table.noProductsDesc')}</p>
                         <button onClick={openAdd} className="mt-6 text-brand-400 hover:text-brand-300 font-medium text-sm flex items-center gap-1">
-                          <Plus className="h-4 w-4" /> Add your first product
+                          <Plus className="h-4 w-4" /> {t('table.addFirstProduct')}
                         </button>
                       </div>
                     </td>
@@ -402,7 +430,7 @@ export default function ProductsPage() {
                       >
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="font-medium text-foreground">{med.name_en}</span>
+                            <span className="font-medium text-foreground">{(locale === 'ar' && med.name_ar) ? med.name_ar : med.name_en}</span>
                             {med.strength && <span className="text-xs text-brand-400 mt-0.5">{med.strength}</span>}
                           </div>
                         </td>
@@ -415,7 +443,7 @@ export default function ProductsPage() {
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
                             <span className="text-sm">{getCategoryName(med.category_id)}</span>
-                            {med.dosage_form && <span className="text-xs text-muted-foreground capitalize">{med.dosage_form.replace('_', ' ')}</span>}
+                            {med.dosage_form && <span className="text-xs text-muted-foreground capitalize">{getDosageFormLabel(med.dosage_form)}</span>}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -426,33 +454,33 @@ export default function ProductsPage() {
                             <span className={cn("font-medium", totalStock <= med.reorder_level ? "text-amber-400" : totalStock === 0 ? "text-red-400" : "text-green-400")}>
                               {totalStock}
                             </span>
-                            <span className="text-xs text-muted-foreground">{med.base_unit || 'Unit'}</span>
+                            <span className="text-xs text-muted-foreground">{getBaseUnitLabel(med.base_unit)}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <Badge variant={med.is_active ? 'success' : 'danger'}>
-                            {med.is_active ? 'Active' : 'Inactive'}
+                            {med.is_active ? t('active') : t('inactive')}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <td className="px-6 py-4 text-right rtl:text-left">
+                          <div className="flex items-center justify-end rtl:justify-start gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openEdit(med);
                               }}
                               className="p-1.5 text-muted-foreground hover:text-brand-400 hover:bg-brand-500/10 rounded-md transition-colors"
-                              title="Edit"
+                              title={t('table.edit')}
                             >
                               <Edit className="h-4 w-4" />
                             </button>
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDeleteDialog({ open: true, id: med.id, name: med.name_en });
+                                setDeleteDialog({ open: true, id: med.id, name: (locale === 'ar' && med.name_ar) ? med.name_ar : med.name_en });
                               }}
                               className="p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors"
-                              title="Delete"
+                              title={t('table.delete')}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -472,21 +500,21 @@ export default function ProductsPage() {
       <SlideOver
         open={slideOpen}
         onClose={() => setSlideOpen(false)}
-        title={editingId ? 'Edit Product' : 'Add New Product'}
+        title={editingId ? t('form.editProduct') : t('form.addNewProduct')}
         footer={
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end rtl:justify-start gap-3">
             <button
               onClick={() => setSlideOpen(false)}
               className="px-4 py-2 text-sm font-medium text-foreground hover:text-foreground transition-colors"
             >
-              Cancel
+              {t('form.cancel')}
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
               className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-500 px-4 text-sm font-medium text-foreground transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {isSaving ? 'Saving...' : 'Save Product'}
+              {isSaving ? t('form.saving') : t('form.saveProduct')}
             </button>
           </div>
         }
@@ -495,12 +523,12 @@ export default function ProductsPage() {
           {/* Basic Info */}
           <section className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              <Pill className="h-4 w-4" /> Basic Information
+              <Pill className="h-4 w-4" /> {t('form.basicInfo')}
             </div>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm text-muted-foreground">Name *</label>
+                  <label className="text-sm text-muted-foreground">{t('form.nameEn')}</label>
                   <input 
                     type="text" 
                     value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
@@ -508,7 +536,17 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm text-muted-foreground">Generic Name</label>
+                  <label className="text-sm text-muted-foreground">{t('form.nameAr')}</label>
+                  <input 
+                    type="text" 
+                    value={formData.name_ar} onChange={e => setFormData({...formData, name_ar: e.target.value})}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm text-muted-foreground">{t('form.genericName')}</label>
                   <input 
                     type="text" 
                     value={formData.generic_name} onChange={e => setFormData({...formData, generic_name: e.target.value})}
@@ -516,7 +554,7 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm text-muted-foreground">Manufacturer</label>
+                  <label className="text-sm text-muted-foreground">{t('form.manufacturer')}</label>
                   <input 
                     type="text" 
                     value={formData.manufacturer} onChange={e => setFormData({...formData, manufacturer: e.target.value})}
@@ -526,7 +564,7 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm text-muted-foreground">SKU *</label>
+                  <label className="text-sm text-muted-foreground">{t('form.sku')}</label>
                   <input 
                     type="text" 
                     value={formData.sku} onChange={e => setFormData({...formData, sku: e.target.value})}
@@ -534,7 +572,7 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div className="space-y-1.5 relative">
-                  <label className="text-sm text-muted-foreground">Barcode</label>
+                  <label className="text-sm text-muted-foreground">{t('form.barcode')}</label>
                   <div className="flex gap-2">
                     <input 
                       type="text" 
@@ -545,7 +583,7 @@ export default function ProductsPage() {
                       type="button"
                       onClick={() => setScannerOpen(true)}
                       className="shrink-0 p-2 border border-border rounded-lg hover:bg-surface text-brand-500 transition-colors"
-                      title="Scan Barcode"
+                      title={t('form.scanBarcode')}
                     >
                       <Camera size={20} />
                     </button>
@@ -558,37 +596,37 @@ export default function ProductsPage() {
           {/* Classification */}
           <section className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              <Tag className="h-4 w-4" /> Classification
+              <Tag className="h-4 w-4" /> {t('form.classification')}
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm text-muted-foreground">Item Type *</label>
+                  <label className="text-sm text-muted-foreground">{t('form.itemType')}</label>
                   <Select 
                     value={formData.item_type} 
                     onChange={v => setFormData({...formData, item_type: v, therapeutic_category: ''})}
-                    options={level1Cats.map(c => ({value: c.id, label: c.name_en}))}
-                    placeholder="Select item type..."
+                    options={level1Cats.map(c => ({value: c.id, label: (locale === 'ar' && c.name_ar) ? c.name_ar : c.name_en}))}
+                    placeholder={t('form.selectItemType')}
                   />
                 </div>
                 {showTherapeutic && (
                   <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2">
-                    <label className="text-sm text-muted-foreground">Therapeutic Category</label>
+                    <label className="text-sm text-muted-foreground">{t('form.therapeuticCategory')}</label>
                     <Select 
                       value={formData.therapeutic_category} 
                       onChange={v => setFormData({...formData, therapeutic_category: v})}
-                      options={level2Cats.map((c: any) => ({value: c.id, label: c.name_en}))}
-                      placeholder="Select therapeutic category..."
+                      options={level2Cats.map((c: any) => ({value: c.id, label: (locale === 'ar' && c.name_ar) ? c.name_ar : c.name_en}))}
+                      placeholder={t('form.selectTherapeutic')}
                     />
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <label className="text-sm text-muted-foreground">Dosage Form</label>
+                  <label className="text-sm text-muted-foreground">{t('form.dosageForm')}</label>
                   <Select 
                     value={formData.dosage_form} 
                     onChange={v => setFormData({...formData, dosage_form: v})}
-                    options={DOSAGE_FORMS.map(d => ({value: d.value, label: d.label_en}))}
-                    placeholder="Select dosage form..."
+                    options={DOSAGE_FORMS.map(d => ({value: d.value, label: locale === 'ar' ? d.label_ar : d.label_en}))}
+                    placeholder={t('form.selectDosageForm')}
                   />
                 </div>
               </div>
@@ -598,13 +636,11 @@ export default function ProductsPage() {
           {/* Details */}
           <section className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              <Beaker className="h-4 w-4" /> Product Details
+              <Beaker className="h-4 w-4" /> {t('form.productDetails')}
             </div>
             <div className="space-y-4">
-
-
               <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">Description</label>
+                <label className="text-sm text-muted-foreground">{t('form.description')}</label>
                 <textarea 
                   rows={3}
                   value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
@@ -617,11 +653,11 @@ export default function ProductsPage() {
           {/* Pricing & Units */}
           <section className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              <DollarSign className="h-4 w-4" /> Pricing & Units
+              <DollarSign className="h-4 w-4" /> {t('form.pricingUnits')}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">Selling Price ({currency}) *</label>
+                <label className="text-sm text-muted-foreground">{t('form.sellingPrice', { currency })}</label>
                 <input 
                   type="number" step="0.01" min="0"
                   value={formData.selling_price} onChange={e => setFormData({...formData, selling_price: e.target.value})}
@@ -629,16 +665,16 @@ export default function ProductsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">Base Unit</label>
+                <label className="text-sm text-muted-foreground">{t('form.baseUnit')}</label>
                 <Select 
                   value={formData.base_unit} 
                   onChange={v => setFormData({...formData, base_unit: v})}
-                  options={BASE_UNITS.map(u => ({value: u.value, label: u.label_en}))}
-                  placeholder="Select unit..."
+                  options={BASE_UNITS.map(u => ({value: u.value, label: locale === 'ar' ? u.label_ar : u.label_en}))}
+                  placeholder={t('form.selectUnit')}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">Units per Pack</label>
+                <label className="text-sm text-muted-foreground">{t('form.unitsPerPack')}</label>
                 <input 
                   type="number" min="1"
                   value={formData.units_per_pack} onChange={e => setFormData({...formData, units_per_pack: parseInt(e.target.value) || 1})}
@@ -653,7 +689,7 @@ export default function ProductsPage() {
             <section className="space-y-4 rounded-xl border border-brand-500/20 bg-brand-500/5 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-brand-400">
-                  <Archive className="h-4 w-4" /> Initial Stock Batch
+                  <Archive className="h-4 w-4" /> {t('form.initialStockBatch')}
                 </div>
                 <Switch 
                   checked={formData.has_initial_batch} 
@@ -664,7 +700,7 @@ export default function ProductsPage() {
               {formData.has_initial_batch && (
                 <div className="grid grid-cols-2 gap-4 pt-2 animate-in fade-in slide-in-from-top-2">
                   <div className="space-y-1.5">
-                    <label className="text-sm text-muted-foreground">Quantity *</label>
+                    <label className="text-sm text-muted-foreground">{t('form.quantity')}</label>
                     <input 
                       type="number" min="1"
                       value={formData.batch_quantity} onChange={e => setFormData({...formData, batch_quantity: e.target.value})}
@@ -672,16 +708,16 @@ export default function ProductsPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm text-muted-foreground">Purchase Price ({currency})</label>
+                    <label className="text-sm text-muted-foreground">{t('form.purchasePrice', { currency })}</label>
                     <input 
                       type="number" step="0.01" min="0"
-                      placeholder="0.00 (optional if unknown)"
+                      placeholder="0.00"
                       value={formData.purchase_price} onChange={e => setFormData({...formData, purchase_price: e.target.value})}
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm text-muted-foreground">Batch Number</label>
+                    <label className="text-sm text-muted-foreground">{t('form.batchNumber')}</label>
                     <input 
                       type="text" 
                       value={formData.batch_number} onChange={e => setFormData({...formData, batch_number: e.target.value})}
@@ -689,16 +725,16 @@ export default function ProductsPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm text-muted-foreground">Supplier</label>
+                    <label className="text-sm text-muted-foreground">{t('form.supplier')}</label>
                     <Select 
                       value={formData.supplier_id} 
                       onChange={v => setFormData({...formData, supplier_id: v})}
                       options={suppliers.map(s => ({value: s.id, label: s.name}))}
-                      placeholder="Select supplier..."
+                      placeholder={t('form.selectSupplier')}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm text-muted-foreground">Production Date</label>
+                    <label className="text-sm text-muted-foreground">{t('form.productionDate')}</label>
                     <input 
                       type="date" 
                       value={formData.production_date} onChange={e => setFormData({...formData, production_date: e.target.value})}
@@ -707,7 +743,7 @@ export default function ProductsPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-sm text-muted-foreground">Expiry Date *</label>
+                    <label className="text-sm text-muted-foreground">{t('form.expiryDate')}</label>
                     <input 
                       type="date" 
                       value={formData.expiry_date} onChange={e => setFormData({...formData, expiry_date: e.target.value})}
@@ -723,32 +759,32 @@ export default function ProductsPage() {
           {/* Flags */}
           <section className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              <AlertCircle className="h-4 w-4" /> Properties & Flags
+              <AlertCircle className="h-4 w-4" /> {t('form.propertiesFlags')}
             </div>
             <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-background/30 p-4">
               <Switch 
                 checked={formData.requires_prescription} 
                 onCheckedChange={c => setFormData({...formData, requires_prescription: c})} 
-                label="Requires Prescription" 
-                description="Rx icon will be shown. Pharmacist approval needed for sale."
+                label={t('form.requiresPrescription')} 
+                description={t('form.requiresPrescriptionDesc')}
               />
               <Switch 
                 checked={formData.controlled_substance} 
                 onCheckedChange={c => setFormData({...formData, controlled_substance: c})} 
-                label="Controlled Substance" 
-                description="Strict tracking and reporting requirements applied."
+                label={t('form.controlledSubstance')} 
+                description={t('form.controlledSubstanceDesc')}
               />
               <Switch 
                 checked={formData.cold_chain} 
                 onCheckedChange={c => setFormData({...formData, cold_chain: c})} 
-                label="Cold Chain Required" 
-                description="Must be stored in refrigerator (2°C to 8°C)."
+                label={t('form.coldChain')} 
+                description={t('form.coldChainDesc')}
               />
               <Switch 
                 checked={formData.allow_loose_sale} 
                 onCheckedChange={c => setFormData({...formData, allow_loose_sale: c})} 
-                label="Allow Loose Sale" 
-                description="Can be sold in individual units (e.g., single tablets) rather than full pack."
+                label={t('form.allowLooseSale')} 
+                description={t('form.allowLooseSaleDesc')}
               />
             </div>
           </section>
@@ -760,8 +796,8 @@ export default function ProductsPage() {
         open={deleteDialog.open}
         onCancel={() => setDeleteDialog({ open: false, id: '', name: '' })}
         onConfirm={handleDelete}
-        title="Delete Product"
-        message={`Are you sure you want to delete ${deleteDialog.name}? This action cannot be undone.`}
+        title={t('deleteDialog.title')}
+        message={t('deleteDialog.message', { name: deleteDialog.name })}
         isLoading={isSaving}
       />
 

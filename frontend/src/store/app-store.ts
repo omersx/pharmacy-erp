@@ -9,11 +9,13 @@ interface AppState {
   locale: 'en' | 'ar';
   density: 'compact' | 'comfortable' | 'touch';
   currency: string;
+  inventoryMode: 'simple' | 'multi_location';
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setTheme: (theme: 'light' | 'dark') => void;
   setLocale: (locale: 'en' | 'ar') => void;
   setCurrency: (currency: string) => void;
+  setInventoryMode: (mode: 'simple' | 'multi_location') => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -26,11 +28,13 @@ export const useAppStore = create<AppState>()(
       locale: 'en',
       density: 'comfortable',
       currency: 'SDG',
+      inventoryMode: 'multi_location',
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       setTheme: (theme) => set({ theme }),
       setLocale: (locale) => set({ locale }),
       setCurrency: (currency) => set({ currency }),
+      setInventoryMode: (mode) => set({ inventoryMode: mode }),
     }),
     { name: 'app-storage' }
   )

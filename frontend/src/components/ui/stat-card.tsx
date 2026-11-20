@@ -1,6 +1,8 @@
+'use client';
 import { Card } from './card';
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface StatCardProps {
   title: string;
@@ -11,6 +13,7 @@ interface StatCardProps {
 }
 
 export function StatCard({ title, value, trend, icon, className }: StatCardProps) {
+  const t = useTranslations('common');
   const isPositive = trend && trend > 0;
   const isNegative = trend && trend < 0;
 
@@ -31,7 +34,7 @@ export function StatCard({ title, value, trend, icon, className }: StatCardProps
               {isPositive ? <TrendingUp size={16} className="mr-1" /> : isNegative ? <TrendingDown size={16} className="mr-1" /> : null}
               {Math.abs(trend)}%
             </span>
-            <span className="text-gray-500 ml-2">vs last month</span>
+            <span className="text-gray-500 ml-2">{t('vsLastMonth')}</span>
           </div>
         )}
       </div>

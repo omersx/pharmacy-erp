@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
-import { X, Printer } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Printer, FileText } from 'lucide-react';
 import { formatMoney } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
+import { A4InvoiceModal } from '@/components/invoices/A4InvoiceModal';
 
 interface SaleReceiptProps {
   open: boolean;
@@ -21,6 +22,7 @@ interface SaleReceiptProps {
 
 export function SaleReceipt({ open, onClose, saleData }: SaleReceiptProps) {
   const { currency } = useAppStore();
+  const [a4ModalOpen, setA4ModalOpen] = useState(false);
 
   if (!open || !saleData) return null;
 
@@ -128,7 +130,7 @@ export function SaleReceipt({ open, onClose, saleData }: SaleReceiptProps) {
         </div>
 
         {/* Footer actions (Not printed) */}
-        <div className="p-4 border-t border-border flex justify-end gap-3 print:hidden bg-surface">
+        <div className="p-4 border-t border-border flex justify-end gap-2.5 print:hidden bg-surface">
           <button 
             onClick={onClose}
             className="px-4 py-2 border border-border rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -136,14 +138,27 @@ export function SaleReceipt({ open, onClose, saleData }: SaleReceiptProps) {
             Close
           </button>
           <button 
+            onClick={() => setA4ModalOpen(true)}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors flex items-center gap-1.5 font-medium shadow-sm"
+          >
+            <FileText size={16} />
+            <span>A4 Invoice</span>
+          </button>
+          <button 
             onClick={() => window.print()}
             className="px-4 py-2 bg-pos-500 text-white rounded-md hover:bg-pos-600 transition-colors flex items-center gap-2"
           >
             <Printer size={18} />
-            Print Receipt
+            <span>Thermal Ticket</span>
           </button>
         </div>
       </div>
+
+      <A4InvoiceModal
+        open={a4ModalOpen}
+        onClose={() => setA4ModalOpen(false)}
+        invoiceData={saleData}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import * as Dialog from '@radix-ui/react-dialog';
+import { useParams } from 'next/navigation';
 
 interface ExpiryBatch {
   batch_id: string;
@@ -50,6 +51,8 @@ interface ExpirySummary {
 }
 
 export function ExpiryCenter() {
+  const params = useParams();
+  const isAr = params?.locale === 'ar';
   const { currency } = useAppStore();
   const [loading, setLoading] = useState(true);
   const [batches, setBatches] = useState<ExpiryBatch[]>([]);
@@ -157,14 +160,14 @@ export function ExpiryCenter() {
           )}
         >
           <div className="flex items-center justify-between text-rose-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">0–30 Days (Urgent)</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{isAr ? '0–30 يوماً (عاجل)' : '0–30 Days (Urgent)'}</span>
             <AlertTriangle size={16} />
           </div>
           <p className="text-2xl font-black text-rose-500">
             {summary?.count_0_30 || 0}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Valuation: <strong className="text-foreground">{currency} {Number(summary?.value_0_30 || 0).toFixed(2)}</strong>
+            {isAr ? 'القيمة: ' : 'Valuation: '}<strong className="text-foreground">{currency} {Number(summary?.value_0_30 || 0).toFixed(2)}</strong>
           </p>
         </div>
 
@@ -179,14 +182,14 @@ export function ExpiryCenter() {
           )}
         >
           <div className="flex items-center justify-between text-amber-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">31–60 Days</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{isAr ? '31–60 يوماً' : '31–60 Days'}</span>
             <Clock size={16} />
           </div>
           <p className="text-2xl font-black text-amber-500">
             {summary?.count_31_60 || 0}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Valuation: <strong className="text-foreground">{currency} {Number(summary?.value_31_60 || 0).toFixed(2)}</strong>
+            {isAr ? 'القيمة: ' : 'Valuation: '}<strong className="text-foreground">{currency} {Number(summary?.value_31_60 || 0).toFixed(2)}</strong>
           </p>
         </div>
 
@@ -201,14 +204,14 @@ export function ExpiryCenter() {
           )}
         >
           <div className="flex items-center justify-between text-yellow-600 dark:text-yellow-400 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">61–90 Days</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{isAr ? '61–90 يوماً' : '61–90 Days'}</span>
             <Clock size={16} />
           </div>
           <p className="text-2xl font-black text-yellow-600 dark:text-yellow-400">
             {summary?.count_61_90 || 0}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Valuation: <strong className="text-foreground">{currency} {Number(summary?.value_61_90 || 0).toFixed(2)}</strong>
+            {isAr ? 'القيمة: ' : 'Valuation: '}<strong className="text-foreground">{currency} {Number(summary?.value_61_90 || 0).toFixed(2)}</strong>
           </p>
         </div>
 
@@ -223,14 +226,14 @@ export function ExpiryCenter() {
           )}
         >
           <div className="flex items-center justify-between text-red-600 dark:text-red-400 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Expired (Blocked)</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{isAr ? 'منتهي الصلاحية (محظور)' : 'Expired (Blocked)'}</span>
             <ShieldX size={16} />
           </div>
           <p className="text-2xl font-black text-red-600 dark:text-red-400">
             {summary?.count_expired || 0}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Write-off Risk: <strong className="text-foreground">{currency} {Number(summary?.value_expired || 0).toFixed(2)}</strong>
+            {isAr ? 'مخاطر الشطب: ' : 'Write-off Risk: '}<strong className="text-foreground">{currency} {Number(summary?.value_expired || 0).toFixed(2)}</strong>
           </p>
         </div>
 
@@ -245,14 +248,14 @@ export function ExpiryCenter() {
           )}
         >
           <div className="flex items-center justify-between text-purple-600 dark:text-purple-400 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">Quarantine & Recall</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{isAr ? 'حجر واستدعاء' : 'Quarantine & Recall'}</span>
             <ShieldAlert size={16} />
           </div>
           <p className="text-2xl font-black text-purple-600 dark:text-purple-400">
             {(summary?.count_quarantined || 0) + (summary?.count_recalled || 0)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Isolated: <strong className="text-foreground">{currency} {((Number(summary?.value_quarantined || 0)) + (Number(summary?.value_recalled || 0))).toFixed(2)}</strong>
+            {isAr ? 'معزول: ' : 'Isolated: '}<strong className="text-foreground">{currency} {((Number(summary?.value_quarantined || 0)) + (Number(summary?.value_recalled || 0))).toFixed(2)}</strong>
           </p>
         </div>
 
@@ -264,13 +267,13 @@ export function ExpiryCenter() {
         {/* Bucket Filter Pills */}
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-background border border-border rounded-xl">
           {[
-            { id: 'ALL', label: 'All At-Risk' },
-            { id: '0_30', label: '0–30d Urgent' },
-            { id: '31_60', label: '31–60d' },
-            { id: '61_90', label: '61–90d' },
-            { id: 'EXPIRED', label: 'Expired' },
-            { id: 'QUARANTINED', label: 'Quarantined' },
-            { id: 'RECALLED', label: 'Recalled' },
+            { id: 'ALL', label: isAr ? 'كل المعرض للخطر' : 'All At-Risk' },
+            { id: '0_30', label: isAr ? '0–30د عاجل' : '0–30d Urgent' },
+            { id: '31_60', label: isAr ? '31–60د' : '31–60d' },
+            { id: '61_90', label: isAr ? '61–90د' : '61–90d' },
+            { id: 'EXPIRED', label: isAr ? 'منتهي الصلاحية' : 'Expired' },
+            { id: 'QUARANTINED', label: isAr ? 'محجور' : 'Quarantined' },
+            { id: 'RECALLED', label: isAr ? 'مستدعى' : 'Recalled' },
           ].map(f => (
             <button
               key={f.id}
@@ -289,13 +292,13 @@ export function ExpiryCenter() {
 
         {/* Search Input */}
         <div className="relative w-full md:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input 
             type="text" 
-            placeholder="Search medicine or batch #..." 
+            placeholder={isAr ? "ابحث عن دواء أو تشغيلة..." : "Search medicine or batch #..."} 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-brand-500 text-foreground"
+            className="w-full pl-9 pr-4 rtl:pl-4 rtl:pr-9 py-2 bg-background border border-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-brand-500 text-foreground"
           />
         </div>
       </div>
@@ -303,16 +306,16 @@ export function ExpiryCenter() {
       {/* ── Batches Table ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-border bg-surface overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
+          <table className="w-full text-left rtl:text-right text-sm whitespace-nowrap">
             <thead className="bg-background text-xs uppercase text-muted-foreground border-b border-border">
               <tr>
-                <th className="px-6 py-4 font-semibold">Medicine</th>
-                <th className="px-6 py-4 font-semibold">Batch Number</th>
-                <th className="px-6 py-4 font-semibold">Expiry Date</th>
-                <th className="px-6 py-4 font-semibold text-center">Remaining Stock</th>
-                <th className="px-6 py-4 font-semibold text-right">Cost Value</th>
-                <th className="px-6 py-4 font-semibold text-center">Batch Status</th>
-                <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                <th className="px-6 py-4 font-semibold text-left rtl:text-right">{isAr ? 'الدواء' : 'Medicine'}</th>
+                <th className="px-6 py-4 font-semibold text-left rtl:text-right">{isAr ? 'رقم التشغيلة' : 'Batch Number'}</th>
+                <th className="px-6 py-4 font-semibold text-left rtl:text-right">{isAr ? 'تاريخ انتهاء الصلاحية' : 'Expiry Date'}</th>
+                <th className="px-6 py-4 font-semibold text-center">{isAr ? 'المخزون المتبقي' : 'Remaining Stock'}</th>
+                <th className="px-6 py-4 font-semibold text-right rtl:text-left">{isAr ? 'قيمة التكلفة' : 'Cost Value'}</th>
+                <th className="px-6 py-4 font-semibold text-center">{isAr ? 'حالة التشغيلة' : 'Batch Status'}</th>
+                <th className="px-6 py-4 font-semibold text-right rtl:text-left">{isAr ? 'إجراءات' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

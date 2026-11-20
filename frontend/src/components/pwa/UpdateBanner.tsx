@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useCurrentLocale } from "@/hooks/use-locale";
 
 /**
  * Update banner that appears when a new service worker version is available.
  * The user must explicitly accept the update (never auto-swap mid-session).
+ * Fully localized for Arabic and English.
  */
 export function UpdateBanner() {
-  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(
-    null
-  );
+  const { isAr } = useCurrentLocale();
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
@@ -72,28 +73,40 @@ export function UpdateBanner() {
   if (!waitingWorker) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md">
+    <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md animate-in slide-in-from-bottom-4">
       <div className="bg-blue-600 text-white rounded-xl shadow-2xl p-4 flex items-center gap-3">
         <div className="flex-1">
-          <p className="text-sm font-semibold">تحديث جديد متوفر</p>
+          <p className="text-sm font-semibold">
+            {isAr ? "تحديث جديد متوفر" : "New Version Available"}
+          </p>
           <p className="text-xs text-blue-100 mt-0.5">
-            A new version is available
+            {isAr
+              ? "يتوفر إصدار جديد من التطبيق، انقر للتحديث"
+              : "A new version of Pharmacy ERP is ready to install"}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={handleDismiss}
             className="px-3 py-1.5 text-xs font-medium rounded-lg hover:bg-blue-500 transition-colors"
           >
-            لاحقاً
+            {isAr ? "لاحقاً" : "Later"}
           </button>
           <button
+            type="button"
             onClick={handleUpdate}
             disabled={isUpdating}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-blue-600 
                        hover:bg-blue-50 transition-colors disabled:opacity-70"
           >
-            {isUpdating ? "جاري التحديث..." : "تحديث الآن"}
+            {isUpdating
+              ? isAr
+                ? "جاري التحديث..."
+                : "Updating..."
+              : isAr
+              ? "تحديث الآن"
+              : "Update Now"}
           </button>
         </div>
       </div>

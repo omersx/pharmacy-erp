@@ -2,13 +2,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Upload, X, File as FileIcon, AlertCircle, CheckCircle2, ChevronRight, FileSpreadsheet, Download, RefreshCw, FileText } from 'lucide-react';
+import { Upload, X, File as FileIcon, AlertCircle, CheckCircle2, ChevronRight, FileSpreadsheet, Download, RefreshCw, FileText, Package } from 'lucide-react';
 import { Button } from './button';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
 
 interface BulkImportModalProps {
   open: boolean;
@@ -26,6 +27,8 @@ interface ParsedRow {
 }
 
 export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkImportModalProps) {
+  const params = useParams();
+  const isAr = params?.locale === 'ar';
   const t = useTranslations();
   const [step, setStep] = useState<Step>(1);
   const [file, setFile] = useState<File | null>(null);
@@ -215,7 +218,7 @@ export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkIm
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <Dialog.Title className="text-xl font-semibold text-slate-100">
-              Bulk Import Medicines
+              {isAr ? 'استيراد الأدوية بالجملة' : 'Bulk Import Medicines'}
             </Dialog.Title>
             <Dialog.Close asChild>
               <button className="text-slate-400 hover:text-slate-100 hover:bg-slate-800 p-2 rounded-full transition-colors">
@@ -230,21 +233,21 @@ export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkIm
               <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= 1 ? 'border-blue-500 bg-blue-500/20' : 'border-slate-600'}`}>
                 1
               </div>
-              <span className="ml-2 font-medium">Upload</span>
+              <span className="ml-2 rtl:mr-2 font-medium">{isAr ? 'رفع الملف' : 'Upload'}</span>
             </div>
             <div className={`w-16 h-px mx-4 ${step >= 2 ? 'bg-blue-500' : 'bg-slate-700'}`} />
             <div className={`flex items-center ${step >= 2 ? 'text-blue-500' : 'text-slate-500'}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= 2 ? 'border-blue-500 bg-blue-500/20' : 'border-slate-600'}`}>
                 2
               </div>
-              <span className="ml-2 font-medium">Preview</span>
+              <span className="ml-2 rtl:mr-2 font-medium">{isAr ? 'معاينة' : 'Preview'}</span>
             </div>
             <div className={`w-16 h-px mx-4 ${step >= 3 ? 'bg-blue-500' : 'bg-slate-700'}`} />
             <div className={`flex items-center ${step >= 3 ? 'text-blue-500' : 'text-slate-500'}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= 3 ? 'border-blue-500 bg-blue-500/20' : 'border-slate-600'}`}>
                 3
               </div>
-              <span className="ml-2 font-medium">Results</span>
+              <span className="ml-2 rtl:mr-2 font-medium">{isAr ? 'النتائج' : 'Results'}</span>
             </div>
           </div>
 
@@ -253,13 +256,22 @@ export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkIm
             {step === 1 && (
               <div className="h-full flex flex-col items-center justify-center space-y-6">
                 
-                <div className="flex space-x-4 mb-4">
+                <div className="flex space-x-4 rtl:space-x-reverse mb-2">
                   <Button variant="outline" size="sm" onClick={() => handleDownloadTemplate('csv')} className="border-slate-700 text-slate-300 hover:bg-slate-800">
-                    <FileText className="w-4 h-4 mr-2" /> Download CSV Template
+                    <FileText className="w-4 h-4 mr-2 rtl:ml-2" /> {isAr ? 'تحميل نموذج CSV' : 'Download CSV Template'}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => handleDownloadTemplate('xlsx')} className="border-slate-700 text-slate-300 hover:bg-slate-800">
-                    <FileSpreadsheet className="w-4 h-4 mr-2" /> Download Excel Template
+                    <FileSpreadsheet className="w-4 h-4 mr-2 rtl:ml-2" /> {isAr ? 'تحميل نموذج Excel' : 'Download Excel Template'}
                   </Button>
+                </div>
+
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 w-full max-w-2xl text-xs text-muted-foreground flex items-center gap-2.5">
+                  <Package className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                  <span>
+                    {isAr 
+                      ? 'يدعم النموذج الآن استيراد مخزون الرف (shelf_stock) ومخزون المستودع (warehouse_stock) بشكل منفصل.'
+                      : 'The template supports importing Front Shelf stock (shelf_stock) and Back Store stock (warehouse_stock) directly into their locations.'}
+                  </span>
                 </div>
 
                 <div 
@@ -271,8 +283,8 @@ export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkIm
                   <div className="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mb-4">
                     <Upload className="w-8 h-8" />
                   </div>
-                  <h3 className="text-xl font-medium text-slate-200 mb-2">Drop your file here</h3>
-                  <p className="text-slate-400 mb-6 text-center">Supports CSV and Excel (.xlsx, .xls) files</p>
+                  <h3 className="text-xl font-medium text-slate-200 mb-2">{isAr ? 'اسحب وأفلت ملفك هنا' : 'Drop your file here'}</h3>
+                  <p className="text-slate-400 mb-6 text-center">{isAr ? 'يدعم ملفات CSV و Excel (.xlsx, .xls)' : 'Supports CSV and Excel (.xlsx, .xls) files'}</p>
                   
                   <input
                     type="file"
@@ -282,7 +294,7 @@ export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkIm
                     accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   />
                   <Button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Browse Files
+                    {isAr ? 'تصفح الملفات' : 'Browse Files'}
                   </Button>
                 </div>
               </div>
@@ -291,35 +303,35 @@ export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkIm
             {step === 2 && (
               <div className="h-full flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-4 rtl:space-x-reverse">
                     <div className="flex items-center px-3 py-1.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      <span className="font-medium">{validCount} valid rows</span>
+                      <CheckCircle2 className="w-4 h-4 mr-2 rtl:ml-2" />
+                      <span className="font-medium">{validCount} {isAr ? 'صفوف صالحة' : 'valid rows'}</span>
                     </div>
                     {errorCount > 0 && (
                       <div className="flex items-center px-3 py-1.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/20">
-                        <AlertCircle className="w-4 h-4 mr-2" />
-                        <span className="font-medium">{errorCount} errors</span>
+                        <AlertCircle className="w-4 h-4 mr-2 rtl:ml-2" />
+                        <span className="font-medium">{errorCount} {isAr ? 'أخطاء' : 'errors'}</span>
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
                     <Button variant="outline" onClick={() => { setStep(1); setFile(null); setParsedData([]); }}>
-                      Back
+                      {isAr ? 'رجوع' : 'Back'}
                     </Button>
                     <Button 
                       onClick={handleImport} 
                       disabled={validCount === 0 || isImporting}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
-                      {isImporting ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                      Import {validCount} Medicines
+                      {isImporting ? <RefreshCw className="w-4 h-4 mr-2 rtl:ml-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2 rtl:ml-2" />}
+                      {isAr ? `استيراد ${validCount} دواء` : `Import ${validCount} Medicines`}
                     </Button>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-auto rounded-lg border border-slate-700/50 bg-slate-900 shadow-inner">
-                  <table className="w-full text-sm text-left">
+                  <table className="w-full text-sm text-left rtl:text-right">
                     <thead className="text-xs text-slate-400 uppercase bg-slate-800/80 sticky top-0 z-10 backdrop-blur-md">
                       <tr>
                         <th className="px-4 py-3 w-10"></th>
@@ -365,20 +377,24 @@ export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkIm
                 <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6">
                   <CheckCircle2 className="w-10 h-10 text-emerald-500" />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-100 mb-2">Import Complete</h2>
+                <h2 className="text-2xl font-bold text-slate-100 mb-2">{isAr ? 'اكتمل الاستيراد' : 'Import Complete'}</h2>
                 <p className="text-slate-400 mb-8 text-center max-w-md">
-                  Successfully imported <span className="font-bold text-emerald-400">{importResults.success}</span> medicines.
+                  {isAr ? (
+                    <>تم استيراد <span className="font-bold text-emerald-400">{importResults.success}</span> دواء بنجاح.</>
+                  ) : (
+                    <>Successfully imported <span className="font-bold text-emerald-400">{importResults.success}</span> medicines.</>
+                  )}
                 </p>
 
                 {importResults.errors && importResults.errors.length > 0 && (
                   <div className="w-full max-w-2xl bg-red-950/30 border border-red-900/50 rounded-lg p-4 mb-8 max-h-[200px] overflow-auto">
                     <h4 className="text-red-400 font-medium mb-2 flex items-center">
-                      <AlertCircle className="w-4 h-4 mr-2" /> Failed Rows ({importResults.errors.length})
+                      <AlertCircle className="w-4 h-4 mr-2 rtl:ml-2" /> {isAr ? `الصفوف غير الناجحة (${importResults.errors.length})` : `Failed Rows (${importResults.errors.length})`}
                     </h4>
                     <ul className="space-y-1 text-sm text-red-300/80">
                       {importResults.errors.map((err, i) => (
                         <li key={i} className="flex">
-                          <span className="font-mono text-red-400 mr-2">Row {err.row || '?'}:</span> 
+                          <span className="font-mono text-red-400 mr-2 rtl:ml-2">Row {err.row || '?'}:</span> 
                           <span>{err.error || err.message || 'Unknown error'}</span>
                         </li>
                       ))}
@@ -387,7 +403,7 @@ export function BulkImportModal({ open, onOpenChange, onImportComplete }: BulkIm
                 )}
 
                 <Button onClick={handleDone} size="lg" className="bg-blue-600 hover:bg-blue-700 text-white min-w-[200px]">
-                  Done
+                  {isAr ? 'تم' : 'Done'}
                 </Button>
               </div>
             )}

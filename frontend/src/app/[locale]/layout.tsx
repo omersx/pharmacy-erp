@@ -22,8 +22,8 @@ export default async function LocaleLayout({
 
   return (
     <div dir={dir} className="min-h-screen bg-background">
-      <PwaProvider />
       <NextIntlClientProvider messages={messages} locale={locale}>
+        <PwaProvider />
         {children}
         <Toaster position="top-center" />
       </NextIntlClientProvider>

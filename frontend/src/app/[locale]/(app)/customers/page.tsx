@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Search, Plus, MoreVertical, Edit, Trash2, Eye, CreditCard, Ban, Users, UserPlus, FileText, DollarSign, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,7 @@ import { useAppStore } from '@/store/app-store';
 import { api } from '@/lib/api';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { CustomerStatementModal } from '@/components/customers/CustomerStatementModal';
 
 interface Customer {
   id: string;
@@ -50,6 +52,8 @@ const DEFAULT_FORM_DATA = {
 export default function CustomersPage() {
   const { locale } = useParams();
   const { currency } = useAppStore();
+  const t = useTranslations('customers');
+  const tCommon = useTranslations('common');
   
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,6 +68,10 @@ export default function CustomersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Statement of Account Modal state
+  const [selectedStatementCustomer, setSelectedStatementCustomer] = useState<{ id: string; name: string } | null>(null);
+  const [isStatementOpen, setIsStatementOpen] = useState(false);
+
   useEffect(() => {
     fetchCustomers();
   }, []);
@@ -74,7 +82,7 @@ export default function CustomersPage() {
       const data = await api.getCustomers();
       setCustomers((data as any[]) || []);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to fetch customers');
+      toast.error(error.message || t('toasts.fetchError'));
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +112,7 @@ export default function CustomersPage() {
 
   const handleSave = async () => {
     if (!formData.name) {
-      toast.error('Name is required');
+      toast.error(t('toasts.nameRequired'));
       return;
     }
     
@@ -119,16 +127,16 @@ export default function CustomersPage() {
       
       if (editingId) {
         await api.updateCustomer(editingId, payload);
-        toast.success('Customer updated successfully');
+        toast.success(t('toasts.updated'));
       } else {
         await api.createCustomer(payload);
-        toast.success('Customer created successfully');
+        toast.success(t('toasts.created'));
       }
       
       setIsSlideOverOpen(false);
       fetchCustomers();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save customer');
+      toast.error(error.message || t('toasts.saveError'));
     } finally {
       setIsSaving(false);
     }
@@ -139,10 +147,10 @@ export default function CustomersPage() {
     
     try {
       await api.deleteCustomer(customerToDelete);
-      toast.success('Customer deleted successfully');
+      toast.success(t('toasts.deleted'));
       fetchCustomers();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to delete customer');
+      toast.error(error.message || t('toasts.deleteError'));
     } finally {
       setIsDeleteDialogOpen(false);
       setCustomerToDelete(null);
@@ -152,15 +160,15 @@ export default function CustomersPage() {
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
       await api.updateCustomer(id, { status: newStatus });
-      toast.success(`Customer ${newStatus.toLowerCase()}`);
+      toast.success(newStatus === 'ACTIVE' ? t('toasts.statusActivated') : t('toasts.statusDeactivated'));
       fetchCustomers();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to update status');
+      toast.error(error.message || t('toasts.statusError'));
     }
   };
   
   const handleAddPayment = () => {
-    toast.error('Payment module not implemented yet');
+    toast.error(t('toasts.paymentNotImplemented'));
   };
 
   const filteredCustomers = useMemo(() => {
@@ -210,34 +218,34 @@ export default function CustomersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Customers</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your customer database and credit accounts</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{t('title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('subtitle')}</p>
         </div>
         <Button variant="primary" onClick={handleOpenAdd} className="gap-2 w-full sm:w-auto">
           <Plus className="h-4 w-4" />
-          Add Customer
+          {t('addCustomer')}
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Customers"
+          title={t('stats.totalCustomers')}
           value={summary.total.toString()}
           icon={<Users className="h-5 w-5" />}
         />
         <StatCard
-          title="New This Month"
+          title={t('stats.newThisMonth')}
           value={summary.newThisMonth.toString()}
           icon={<UserPlus className="h-5 w-5" />}
         />
         <StatCard
-          title="Credit Accounts"
+          title={t('stats.creditAccounts')}
           value={summary.creditCustomers.toString()}
           icon={<FileText className="h-5 w-5" />}
         />
         <StatCard
-          title="Outstanding Balance"
+          title={t('stats.outstandingBalance')}
           value={formatCurrency(summary.outstandingBalance)}
           icon={<DollarSign className="h-5 w-5" />}
         />
@@ -247,10 +255,10 @@ export default function CustomersPage() {
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm">
         <div className="flex flex-col sm:flex-row flex-1 w-full gap-4 items-center">
           <div className="w-full sm:max-w-sm relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+            <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
             <Input
-              placeholder="Search customers..."
-              className="pl-10 bg-surface w-full"
+              placeholder={t('searchPlaceholder')}
+              className="pl-10 rtl:pl-4 rtl:pr-10 bg-surface w-full"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -258,10 +266,10 @@ export default function CustomersPage() {
           <div className="w-full sm:w-[180px]">
             <Select
               options={[
-                { value: 'ALL', label: 'All Customers' },
-                { value: 'ACTIVE', label: 'Active Only' },
-                { value: 'INACTIVE', label: 'Inactive Only' },
-                { value: 'HAS_BALANCE', label: 'Has Balance' },
+                { value: 'ALL', label: t('filters.all') },
+                { value: 'ACTIVE', label: t('filters.activeOnly') },
+                { value: 'INACTIVE', label: t('filters.inactiveOnly') },
+                { value: 'HAS_BALANCE', label: t('filters.hasBalance') },
               ]}
               value={statusFilter}
               onChange={setStatusFilter}
@@ -273,15 +281,15 @@ export default function CustomersPage() {
       {/* Table */}
       <div className="flex-1 bg-card border border-border rounded-xl overflow-hidden shadow-sm flex flex-col">
         <div className="overflow-x-auto flex-1">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left rtl:text-right">
             <thead className="text-xs text-gray-500 dark:text-gray-400 bg-surface uppercase border-b border-border sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-4 font-medium">Customer</th>
-                <th className="px-6 py-4 font-medium hidden md:table-cell">Contact</th>
-                <th className="px-6 py-4 font-medium text-right hidden lg:table-cell">Total Purchases</th>
-                <th className="px-6 py-4 font-medium text-right">Balance</th>
-                <th className="px-6 py-4 font-medium text-center">Status</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
+                <th className="px-6 py-4 font-medium text-left rtl:text-right">{t('table.customer')}</th>
+                <th className="px-6 py-4 font-medium text-left rtl:text-right hidden md:table-cell">{t('table.contact')}</th>
+                <th className="px-6 py-4 font-medium text-right rtl:text-left hidden lg:table-cell">{t('table.totalPurchases')}</th>
+                <th className="px-6 py-4 font-medium text-right rtl:text-left">{t('table.balance')}</th>
+                <th className="px-6 py-4 font-medium text-center">{t('table.status')}</th>
+                <th className="px-6 py-4 font-medium text-right rtl:text-left">{t('table.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -290,14 +298,14 @@ export default function CustomersPage() {
                   <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center">
                       <Activity className="h-8 w-8 animate-pulse mb-2 text-brand-500" />
-                      <p>Loading customers...</p>
+                      <p>{t('loading')}</p>
                     </div>
                   </td>
                 </tr>
               ) : filteredCustomers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    No customers found matching your criteria.
+                    {t('noCustomers')}
                   </td>
                 </tr>
               ) : (
@@ -307,24 +315,29 @@ export default function CustomersPage() {
                     <tr key={customer.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{customer.name}</span>
-                          {customer.arabic_name && (
+                          <span className="font-medium text-foreground">
+                            {locale === 'ar' && customer.arabic_name ? customer.arabic_name : customer.name}
+                          </span>
+                          {customer.arabic_name && locale !== 'ar' && (
                             <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{customer.arabic_name}</span>
+                          )}
+                          {customer.name && locale === 'ar' && customer.arabic_name && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{customer.name}</span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 hidden md:table-cell">
                         <div className="flex flex-col">
-                          <span className="text-gray-700 dark:text-gray-300">{customer.phone || '-'}</span>
+                          <span className="text-gray-700 dark:text-gray-300" dir="ltr">{customer.phone || '-'}</span>
                           {customer.email && (
                             <span className="text-xs text-gray-500">{customer.email}</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-700 dark:text-gray-300 hidden lg:table-cell">
+                      <td className="px-6 py-4 text-right rtl:text-left text-gray-700 dark:text-gray-300 hidden lg:table-cell">
                         {customer.total_purchases !== undefined ? formatCurrency(customer.total_purchases) : formatCurrency(0)}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right rtl:text-left">
                         <span className={cn(
                           "font-medium",
                           (customer.balance || 0) > 0 ? "text-danger" : "text-gray-700 dark:text-gray-300"
@@ -334,45 +347,66 @@ export default function CustomersPage() {
                       </td>
                       <td className="px-6 py-4 text-center">
                         <Badge variant={isActive ? 'success' : 'default'}>
-                          {isActive ? 'Active' : 'Inactive'}
+                          {isActive ? t('table.active') : t('table.inactive')}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <DropdownMenu.Root>
-                          <DropdownMenu.Trigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenu.Trigger>
-                          <DropdownMenu.Portal>
-                            <DropdownMenu.Content align="end" className="z-50 min-w-[160px] overflow-hidden rounded-lg border border-border bg-card p-1 shadow-xl animate-in data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2">
-                              <DropdownMenu.Item asChild>
-                                <Link 
-                                  href={`/${locale}/customers/${customer.id}`}
-                                  className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
+                      <td className="px-6 py-4 text-right rtl:text-left">
+                        <div className="flex items-center justify-end rtl:justify-start gap-1">
+                          <button
+                            onClick={() => {
+                              setSelectedStatementCustomer({ id: customer.id, name: customer.name });
+                              setIsStatementOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg text-brand-400 hover:text-brand-300 hover:bg-brand-500/10 transition-colors"
+                            title={t('actions.statement')}
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+
+                          <DropdownMenu.Root>
+                            <DropdownMenu.Trigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenu.Trigger>
+                            <DropdownMenu.Portal>
+                              <DropdownMenu.Content align={locale === 'ar' ? 'start' : 'end'} className="z-50 min-w-[180px] overflow-hidden rounded-lg border border-border bg-card p-1 shadow-xl animate-in data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2">
+                                <DropdownMenu.Item 
+                                  onClick={() => {
+                                    setSelectedStatementCustomer({ id: customer.id, name: customer.name });
+                                    setIsStatementOpen(true);
+                                  }}
+                                  className="flex items-center gap-2 px-2 py-2 text-sm text-brand-400 hover:bg-brand-500/10 rounded-md cursor-pointer outline-none transition-colors"
                                 >
-                                  <Eye className="h-4 w-4" /> View Profile
-                                </Link>
-                              </DropdownMenu.Item>
+                                  <FileText className="h-4 w-4" /> {t('actions.statement')}
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Item asChild>
+                                  <Link 
+                                    href={`/${locale}/customers/${customer.id}`}
+                                    className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
+                                  >
+                                    <Eye className="h-4 w-4" /> {t('actions.viewProfile')}
+                                  </Link>
+                                </DropdownMenu.Item>
                               <DropdownMenu.Item 
                                 onClick={() => handleOpenEdit(customer)}
                                 className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
                               >
-                                <Edit className="h-4 w-4" /> Edit Details
+                                <Edit className="h-4 w-4" /> {t('actions.edit')}
                               </DropdownMenu.Item>
                               <DropdownMenu.Item asChild>
                                 <Link 
                                   href={`/${locale}/sales?customerId=${customer.id}`}
                                   className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
                                 >
-                                  <Activity className="h-4 w-4" /> New Sale
+                                  <Activity className="h-4 w-4" /> {t('actions.newSale')}
                                 </Link>
                               </DropdownMenu.Item>
                               <DropdownMenu.Item 
                                 onClick={handleAddPayment}
                                 className="flex items-center gap-2 px-2 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground rounded-md cursor-pointer outline-none transition-colors"
                               >
-                                <CreditCard className="h-4 w-4" /> Add Payment
+                                <CreditCard className="h-4 w-4" /> {t('actions.addPayment')}
                               </DropdownMenu.Item>
                               <DropdownMenu.Separator className="h-px bg-border my-1" />
                               {isActive ? (
@@ -380,14 +414,14 @@ export default function CustomersPage() {
                                   onClick={() => handleStatusChange(customer.id, 'INACTIVE')}
                                   className="flex items-center gap-2 px-2 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md cursor-pointer outline-none transition-colors"
                                 >
-                                  <Ban className="h-4 w-4" /> Deactivate
+                                  <Ban className="h-4 w-4" /> {t('actions.deactivate')}
                                 </DropdownMenu.Item>
                               ) : (
                                 <DropdownMenu.Item 
                                   onClick={() => handleStatusChange(customer.id, 'ACTIVE')}
                                   className="flex items-center gap-2 px-2 py-2 text-sm text-success hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md cursor-pointer outline-none transition-colors"
                                 >
-                                  <Activity className="h-4 w-4" /> Activate
+                                  <Activity className="h-4 w-4" /> {t('actions.activate')}
                                 </DropdownMenu.Item>
                               )}
                               <DropdownMenu.Item 
@@ -397,11 +431,12 @@ export default function CustomersPage() {
                                 }}
                                 className="flex items-center gap-2 px-2 py-2 text-sm text-danger hover:bg-red-50 dark:hover:bg-red-950/50 hover:text-red-600 dark:hover:text-red-400 rounded-md cursor-pointer outline-none transition-colors"
                               >
-                                <Trash2 className="h-4 w-4" /> Delete
+                                <Trash2 className="h-4 w-4" /> {t('actions.delete')}
                               </DropdownMenu.Item>
                             </DropdownMenu.Content>
                           </DropdownMenu.Portal>
                         </DropdownMenu.Root>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -416,21 +451,21 @@ export default function CustomersPage() {
       <SlideOver
         open={isSlideOverOpen}
         onClose={() => setIsSlideOverOpen(false)}
-        title={editingId ? 'Edit Customer' : 'Add New Customer'}
+        title={editingId ? t('form.editTitle') : t('form.addTitle')}
       >
         <div className="space-y-5">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Full Name <span className="text-danger">*</span></label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.fullName')} <span className="text-danger">*</span></label>
             <Input 
-              placeholder="e.g. Ahmed Ali" 
+              placeholder={t('form.fullNamePlaceholder')} 
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Arabic Name</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.arabicName')}</label>
             <Input 
-              placeholder="أحمد علي" 
+              placeholder={t('form.arabicNamePlaceholder')} 
               dir="auto"
               value={formData.arabic_name}
               onChange={(e) => setFormData(prev => ({ ...prev, arabic_name: e.target.value }))}
@@ -438,34 +473,34 @@ export default function CustomersPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.phone')}</label>
               <Input 
-                placeholder="+252 XXXXXXX" 
+                placeholder={t('form.phonePlaceholder')} 
                 value={formData.phone}
                 onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.email')}</label>
               <Input 
                 type="email"
-                placeholder="email@example.com" 
+                placeholder={t('form.emailPlaceholder')} 
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
               />
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Address</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.address')}</label>
             <Input 
-              placeholder="Street, District, City" 
+              placeholder={t('form.addressPlaceholder')} 
               value={formData.address}
               onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Credit Limit ({currency})</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.creditLimit', { currency: currency || 'USD' })}</label>
               <Input 
                 type="number"
                 min="0"
@@ -475,7 +510,7 @@ export default function CustomersPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Opening Balance ({currency})</label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.openingBalance', { currency: currency || 'USD' })}</label>
               <Input 
                 type="number"
                 min="0"
@@ -484,14 +519,14 @@ export default function CustomersPage() {
                 onChange={(e) => setFormData(prev => ({ ...prev, opening_balance: Number(e.target.value) }))}
                 disabled={!!editingId} // Usually shouldn't change after creation
               />
-              {!!editingId && <p className="text-xs text-gray-500">Cannot edit after creation</p>}
+              {!!editingId && <p className="text-xs text-gray-500">{t('form.cannotEditOpeningBalance')}</p>}
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.notes')}</label>
             <textarea
               className="flex min-h-[100px] w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Any additional information..."
+              placeholder={t('form.notesPlaceholder')}
               value={formData.notes}
               onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
             />
@@ -500,8 +535,8 @@ export default function CustomersPage() {
           <div className="pt-2">
             <div className="flex items-center justify-between border border-border p-4 rounded-lg bg-surface">
               <div className="space-y-0.5">
-                <label className="text-sm font-medium text-foreground">Active Status</label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Can this customer make new purchases?</p>
+                <label className="text-sm font-medium text-foreground">{t('form.activeStatus')}</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('form.activeStatusDesc')}</p>
               </div>
               <Switch 
                 checked={formData.is_active}
@@ -512,10 +547,10 @@ export default function CustomersPage() {
 
           <div className="pt-6 flex justify-end gap-3 border-t border-border mt-6">
             <Button variant="secondary" onClick={() => setIsSlideOverOpen(false)}>
-              Cancel
+              {t('form.cancel')}
             </Button>
             <Button variant="primary" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Save Customer'}
+              {isSaving ? t('form.saving') : t('form.save')}
             </Button>
           </div>
         </div>
@@ -529,10 +564,24 @@ export default function CustomersPage() {
           setCustomerToDelete(null);
         }}
         onConfirm={handleDelete}
-        title="Delete Customer"
-        message="Are you sure you want to delete this customer? This action cannot be undone and will fail if the customer has existing transactions or outstanding balance."
-        confirmText="Delete Customer"
+        title={t('deleteDialog.title')}
+        message={t('deleteDialog.message')}
+        confirmText={t('deleteDialog.confirm')}
       />
+
+      {/* Official Customer Statement Modal */}
+      {selectedStatementCustomer && (
+        <CustomerStatementModal
+          open={isStatementOpen}
+          onClose={() => {
+            setIsStatementOpen(false);
+            setSelectedStatementCustomer(null);
+            fetchCustomers();
+          }}
+          customerId={selectedStatementCustomer.id}
+          customerName={selectedStatementCustomer.name}
+        />
+      )}
     </div>
   );
 }

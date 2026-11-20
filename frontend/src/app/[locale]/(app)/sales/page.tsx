@@ -8,17 +8,44 @@ import { useAppStore } from '@/store/app-store';
 import { format } from 'date-fns';
 import { 
   Search, Calendar, Filter, Receipt, ArrowLeftRight, 
-  ChevronRight, AlertCircle, RefreshCw, X, Calculator,
+  ChevronRight, ChevronDown, AlertCircle, RefreshCw, X, Calculator,
   TrendingUp, TrendingDown, CheckCircle2, ArrowDownCircle,
   ArrowUpCircle, DollarSign, Clock, ShieldAlert, CreditCard,
-  RotateCcw
+  RotateCcw, Banknote, User as UserIcon, ExternalLink, Plus,
+  FileText, Settings
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney, formatDate, formatDateTime } from '@/lib/utils';
+import { useTranslations, useLocale } from 'next-intl';
 import * as Dialog from '@radix-ui/react-dialog';
 import { ReturnModal } from './ReturnModal';
+import { A4InvoiceModal } from '@/components/invoices/A4InvoiceModal';
+import { InvoiceDetailModal } from '@/components/invoices/InvoiceDetailModal';
+import { InvoiceSettingsModal } from '@/components/invoices/InvoiceSettingsModal';
 
 export default function SalesHistoryPage() {
-  const [activeTab, setActiveTab] = useState<'sales' | 'sessions'>('sales');
+  const t = useTranslations('sales');
+  const locale = useLocale();
+  const [activeTab, setActiveTab] = useState<'sales' | 'invoices' | 'sessions' | 'payments'>('sales');
+
+  const getPaymentMethodLabel = (method: string) => {
+    if (!method) return '-';
+    const upper = method.toUpperCase();
+    try {
+      return t(`paymentMethods.${upper}`);
+    } catch {
+      return method;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    if (status === 'COMPLETED') {
+      return <Badge variant="success">{t('filters.completed')}</Badge>;
+    } else if (status === 'PARTIALLY_RETURNED') {
+      return <Badge variant="warning">{t('filters.partiallyReturned')}</Badge>;
+    } else {
+      return <Badge variant="danger">{t('filters.fullyReturned')}</Badge>;
+    }
+  };
   
   // Sales State
   const [sales, setSales] = useState<any[]>([]);
@@ -31,6 +58,17 @@ export default function SalesHistoryPage() {
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [isReturning, setIsReturning] = useState(false);
 
+  // Invoices State (Odoo /odoo/customer-invoices parity)
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState('ALL');
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [invoiceDetailOpen, setInvoiceDetailOpen] = useState(false);
+  const [invoiceSettingsOpen, setInvoiceSettingsOpen] = useState(false);
+  const [a4ModalOpen, setA4ModalOpen] = useState(false);
+  const [a4InvoiceData, setA4InvoiceData] = useState<any | null>(null);
+
   // Cash Sessions State
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
@@ -40,13 +78,39 @@ export default function SalesHistoryPage() {
   const [loadingSessionSummary, setLoadingSessionSummary] = useState(false);
   const [sessionDetailsOpen, setSessionDetailsOpen] = useState(false);
 
+  // Payments Ledger State (Odoo /odoo/action-431 parity)
+  const [paymentsLedger, setPaymentsLedger] = useState<any[]>([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('ALL');
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     if (activeTab === 'sales') {
       fetchSales();
-    } else {
+    } else if (activeTab === 'invoices') {
+      fetchInvoices();
+    } else if (activeTab === 'sessions') {
       fetchSessions();
+    } else if (activeTab === 'payments') {
+      fetchPayments();
     }
-  }, [activeTab, statusFilter, sessionFilter]);
+  }, [activeTab, statusFilter, invoiceStatusFilter, sessionFilter, paymentMethodFilter]);
+
+  const fetchInvoices = async () => {
+    setLoadingInvoices(true);
+    try {
+      const data: any = await api.getInvoices({
+        status: invoiceStatusFilter !== 'ALL' ? invoiceStatusFilter : undefined,
+        search: invoiceSearch || undefined,
+      });
+      setInvoices(Array.isArray(data) ? data : []);
+    } catch (error) {
+      toast.error('Failed to load customer invoices');
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
 
   const fetchSales = async () => {
     setLoading(true);
@@ -70,6 +134,25 @@ export default function SalesHistoryPage() {
       toast.error('Failed to load cash sessions');
     } finally {
       setLoadingSessions(false);
+    }
+  };
+
+  const fetchPayments = async () => {
+    setLoadingPayments(true);
+    try {
+      const params = paymentMethodFilter !== 'ALL' ? { payment_method: paymentMethodFilter } : undefined;
+      const data: any = await api.getPaymentsLedger(params);
+      const list = Array.isArray(data) ? data : [];
+      setPaymentsLedger(list);
+      
+      // Expand all groups by default
+      const exp: Record<string, boolean> = {};
+      list.forEach((g: any) => { exp[g.payment_method] = true; });
+      setExpandedGroups(exp);
+    } catch (e) {
+      toast.error('Failed to load payments ledger');
+    } finally {
+      setLoadingPayments(false);
     }
   };
 
@@ -106,22 +189,11 @@ export default function SalesHistoryPage() {
     }
   };
 
-  const handleProcessReturn = async () => {
-    if (!selectedSale) return;
-    
-    if (confirm(`Are you sure you want to refund Invoice ${selectedSale.invoice_number}? This action cannot be undone.`)) {
-      setIsReturning(true);
-      try {
-        const result = await api.returnSale(selectedSale.id);
-        toast.success(`Invoice ${selectedSale.invoice_number} has been refunded.`);
-        setSelectedSale(result);
-        fetchSales();
-      } catch (error) {
-        toast.error('Failed to process return. Ensure it is not already returned.');
-      } finally {
-        setIsReturning(false);
-      }
-    }
+  const toggleGroup = (method: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [method]: !prev[method]
+    }));
   };
 
   return (
@@ -130,37 +202,61 @@ export default function SalesHistoryPage() {
       <div className="p-6 pb-0 flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Sales & Cash Register</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('title')}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Audit receipts, track cash sessions, and inspect register variances
+              {t('subtitle')}
             </p>
           </div>
 
           {/* Navigation Pill Switcher */}
-          <div className="flex items-center p-1 bg-surface border border-border rounded-xl">
+          <div className="flex items-center p-1 bg-surface border border-border rounded-xl flex-wrap">
             <button
               onClick={() => setActiveTab('sales')}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all",
+                "flex items-center gap-2 px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all",
                 activeTab === 'sales'
                   ? "bg-brand-500 text-white shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Receipt size={16} />
-              Invoices & Receipts
+              <Receipt size={15} />
+              {t('tabs.ordersPos')}
+            </button>
+            <button
+              onClick={() => setActiveTab('invoices')}
+              className={cn(
+                "flex items-center gap-2 px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all",
+                activeTab === 'invoices'
+                  ? "bg-brand-500 text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <FileText size={15} />
+              {t('tabs.customerInvoices')}
             </button>
             <button
               onClick={() => setActiveTab('sessions')}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all",
+                "flex items-center gap-2 px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all",
                 activeTab === 'sessions'
                   ? "bg-brand-500 text-white shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Calculator size={16} />
-              Cash Shifts & Registers
+              <Calculator size={15} />
+              {t('tabs.sessionsShifts')}
+            </button>
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={cn(
+                "flex items-center gap-2 px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-lg transition-all",
+                activeTab === 'payments'
+                  ? "bg-brand-500 text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <CreditCard size={15} />
+              {t('tabs.paymentsLedger')}
             </button>
           </div>
         </div>
@@ -168,70 +264,162 @@ export default function SalesHistoryPage() {
         {/* Tab-Specific Filters Bar */}
         {activeTab === 'sales' ? (
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            {/* Search */}
             <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input 
                 type="text" 
-                placeholder="Search invoice number..." 
+                placeholder={t('filters.searchPlaceholder')} 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 text-foreground"
+                className="w-full pl-9 rtl:pl-4 rtl:pr-9 pr-4 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 text-foreground"
               />
             </form>
 
-            {/* Status Filter */}
             <div className="flex items-center p-1 bg-surface border border-border rounded-lg">
+              {[
+                { id: 'ALL', label: t('filters.all') },
+                { id: 'COMPLETED', label: t('filters.completed') },
+                { id: 'PARTIALLY_RETURNED', label: t('filters.partiallyReturned') },
+                { id: 'RETURNED', label: t('filters.returned') }
+              ].map((st) => (
+                <button
+                  key={st.id}
+                  onClick={() => setStatusFilter(st.id)}
+                  className={cn(
+                    "px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors",
+                    statusFilter === st.id ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : activeTab === 'invoices' ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <div className="relative w-full">
+                <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input 
+                  type="text" 
+                  placeholder={t('filters.searchInvoices')} 
+                  value={invoiceSearch}
+                  onChange={(e) => setInvoiceSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && fetchInvoices()}
+                  className="w-full pl-9 rtl:pl-4 rtl:pr-9 pr-4 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 text-foreground"
+                />
+              </div>
               <button
-                onClick={() => setStatusFilter('ALL')}
-                className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", statusFilter === 'ALL' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
+                onClick={fetchInvoices}
+                className="p-2 border border-border bg-surface hover:bg-background rounded-lg text-foreground/70"
+                title="Refresh invoices"
               >
-                All
+                <RefreshCw size={15} />
               </button>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center p-1 bg-surface border border-border rounded-lg">
+                {[
+                  { id: 'ALL', label: t('filters.allInvoices') },
+                  { id: 'DRAFT', label: t('filters.draft') },
+                  { id: 'POSTED', label: t('filters.posted') },
+                  { id: 'PAID', label: t('filters.paid') },
+                  { id: 'CANCELLED', label: t('filters.cancelled') },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    onClick={() => setInvoiceStatusFilter(st.id)}
+                    className={cn(
+                      "px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors",
+                      invoiceStatusFilter === st.id ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+
               <button
-                onClick={() => setStatusFilter('COMPLETED')}
-                className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", statusFilter === 'COMPLETED' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
+                onClick={() => {
+                  setSelectedInvoiceId(null);
+                  setInvoiceDetailOpen(true);
+                }}
+                className="px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
               >
-                Completed
+                <Plus size={15} />
+                <span>{t('table.newInvoice')}</span>
               </button>
+
               <button
-                onClick={() => setStatusFilter('PARTIALLY_RETURNED')}
-                className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", statusFilter === 'PARTIALLY_RETURNED' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
+                onClick={() => setInvoiceSettingsOpen(true)}
+                className="p-2 border border-border bg-surface hover:bg-background rounded-lg text-foreground/70 hover:text-foreground transition-colors"
+                title="Customize Pharmacy Invoice Branding"
               >
-                Partially Returned
-              </button>
-              <button
-                onClick={() => setStatusFilter('RETURNED')}
-                className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", statusFilter === 'RETURNED' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
-              >
-                Fully Returned
+                <Settings size={16} />
               </button>
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'sessions' ? (
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <span className="text-sm text-muted-foreground font-medium">
-              Filter cash shifts by register status
+            <span className="text-xs sm:text-sm text-muted-foreground font-medium">
+              {t('filters.filterShiftsDesc')}
             </span>
             <div className="flex items-center p-1 bg-surface border border-border rounded-lg">
               <button
                 onClick={() => setSessionFilter('ALL')}
-                className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", sessionFilter === 'ALL' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
+                className={cn("px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors", sessionFilter === 'ALL' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
               >
-                All Shifts
+                {t('filters.allShifts')}
               </button>
               <button
                 onClick={() => setSessionFilter('OPEN')}
-                className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", sessionFilter === 'OPEN' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
+                className={cn("px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors", sessionFilter === 'OPEN' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
               >
-                Active / Open
+                {t('filters.inProgress')}
               </button>
               <button
                 onClick={() => setSessionFilter('CLOSED')}
-                className={cn("px-3 py-1 text-sm font-medium rounded-md transition-colors", sessionFilter === 'CLOSED' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
+                className={cn("px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors", sessionFilter === 'CLOSED' ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground")}
               >
-                Closed & Reconciled
+                {t('filters.closedPosted')}
               </button>
+            </div>
+          </div>
+        ) : (
+          /* Payments Ledger Filter Bar */
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input 
+                type="text" 
+                placeholder={t('filters.searchPayments')} 
+                value={paymentSearch}
+                onChange={(e) => setPaymentSearch(e.target.value)}
+                className="w-full pl-9 rtl:pl-4 rtl:pr-9 pr-4 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 text-foreground"
+              />
+            </div>
+
+            <div className="flex items-center flex-wrap gap-1 p-1 bg-surface border border-border rounded-lg">
+              {[
+                { id: 'ALL', label: t('filters.allMethods') },
+                { id: 'CASH', label: t('paymentMethods.CASH') },
+                { id: 'BANKAK', label: t('paymentMethods.BANKAK') },
+                { id: 'FAWRY', label: t('paymentMethods.FAWRY') },
+                { id: 'OCASH', label: t('paymentMethods.OCASH') },
+                { id: 'AMIN', label: t('paymentMethods.AMIN') },
+              ].map(pm => (
+                <button
+                  key={pm.id}
+                  onClick={() => setPaymentMethodFilter(pm.id)}
+                  className={cn(
+                    "px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors",
+                    paymentMethodFilter === pm.id ? "bg-brand-500 text-white" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {pm.label}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -240,28 +428,30 @@ export default function SalesHistoryPage() {
       {/* Main Content Table Area */}
       <div className="p-6 flex-1">
         <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-sm h-full flex flex-col">
-          {activeTab === 'sales' ? (
-            /* ===== SALES TABLE ===== */
+          
+          {/* TAB 1: ORDERS & POS (Odoo /odoo/pos-orders parity) */}
+          {activeTab === 'sales' && (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
+              <table className="w-full text-left rtl:text-right text-sm whitespace-nowrap">
                 <thead className="bg-background text-xs uppercase text-muted-foreground border-b border-border">
                   <tr>
-                    <th className="px-6 py-4 font-semibold">Invoice</th>
-                    <th className="px-6 py-4 font-semibold hidden md:table-cell">Date</th>
-                    <th className="px-6 py-4 font-semibold">Customer</th>
-                    <th className="px-6 py-4 font-semibold text-center hidden md:table-cell">Items</th>
-                    <th className="px-6 py-4 font-semibold text-right">Total</th>
-                    <th className="px-6 py-4 font-semibold text-center hidden md:table-cell">Payment</th>
-                    <th className="px-6 py-4 font-semibold text-right">Status</th>
+                    <th className="px-6 py-4 font-semibold">{t('table.orderInvoiceRef')}</th>
+                    <th className="px-6 py-4 font-semibold hidden md:table-cell">{t('table.date')}</th>
+                    <th className="px-6 py-4 font-semibold">{t('table.customer')}</th>
+                    <th className="px-6 py-4 font-semibold text-center hidden md:table-cell">{t('table.items')}</th>
+                    <th className="px-6 py-4 font-semibold text-right rtl:text-left">{t('table.total')}</th>
+                    <th className="px-6 py-4 font-semibold text-center hidden md:table-cell">{t('table.payment')}</th>
+                    <th className="px-6 py-4 font-semibold text-center">{t('table.status')}</th>
+                    <th className="px-6 py-4 font-semibold text-center">{t('table.invoiceStatus')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {loading ? (
-                    <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">Loading sales...</td></tr>
+                    <tr><td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">{t('table.loadingSales')}</td></tr>
                   ) : sales.length === 0 ? (
-                    <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground flex flex-col items-center justify-center">
+                    <tr><td colSpan={8} className="px-6 py-12 text-center text-muted-foreground flex flex-col items-center justify-center">
                       <Receipt className="h-10 w-10 mb-3 opacity-20" />
-                      No sales found for the selected filters.
+                      {t('table.noSalesFound')}
                     </td></tr>
                   ) : (
                     sales.map(sale => (
@@ -275,31 +465,31 @@ export default function SalesHistoryPage() {
                           {sale.invoice_number}
                         </td>
                         <td className="px-6 py-4 text-muted-foreground hidden md:table-cell">
-                          {sale.created_at ? format(new Date(sale.created_at), 'MMM dd, yyyy - hh:mm a') : '-'}
+                          {sale.created_at ? formatDateTime(sale.created_at, locale) : '-'}
                         </td>
                         <td className="px-6 py-4 text-foreground">
-                          {sale.customer?.name || <span className="text-muted-foreground italic">Walk-in</span>}
+                          {sale.customer?.name || <span className="text-muted-foreground italic">{t('table.walkIn')}</span>}
                         </td>
                         <td className="px-6 py-4 text-center text-muted-foreground hidden md:table-cell">
                           {sale.items?.length || 0}
                         </td>
-                        <td className="px-6 py-4 text-right font-bold text-foreground">
-                          {currency} {Number(sale.total_amount).toFixed(2)}
+                        <td className="px-6 py-4 text-right rtl:text-left font-bold text-foreground">
+                          {formatMoney(Number(sale.total_amount), currency)}
                         </td>
                         <td className="px-6 py-4 text-center hidden md:table-cell">
-                          {sale.payment_method === 'SPLIT' ? (
-                            <Badge variant="warning" className="uppercase text-xs font-semibold">SPLIT</Badge>
-                          ) : (
-                            <Badge variant="default" className="uppercase text-xs">{sale.payment_method}</Badge>
-                          )}
+                          <Badge variant="default" className="text-xs font-semibold">{getPaymentMethodLabel(sale.payment_method)}</Badge>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          {sale.status === 'COMPLETED' ? (
-                            <Badge variant="success">Completed</Badge>
-                          ) : sale.status === 'PARTIALLY_RETURNED' ? (
-                            <Badge variant="warning">Partially Returned</Badge>
+                        <td className="px-6 py-4 text-center">
+                          {getStatusBadge(sale.status)}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {sale.is_invoiced || sale.invoice_status === 'FULLY_INVOICED' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              <CheckCircle2 size={12} />
+                              {t('table.fullyInvoiced')}
+                            </span>
                           ) : (
-                            <Badge variant="danger">Fully Returned</Badge>
+                            <span className="text-muted-foreground/60 text-xs">—</span>
                           )}
                         </td>
                       </tr>
@@ -308,37 +498,170 @@ export default function SalesHistoryPage() {
                 </tbody>
               </table>
             </div>
-          ) : (
-            /* ===== CASH SESSIONS TABLE ===== */
+          )}
+
+          {/* TAB 2: CUSTOMER INVOICES (Odoo /odoo/customer-invoices parity) */}
+          {activeTab === 'invoices' && (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
+              <table className="w-full text-left rtl:text-right text-sm whitespace-nowrap">
                 <thead className="bg-background text-xs uppercase text-muted-foreground border-b border-border">
                   <tr>
-                    <th className="px-6 py-4 font-semibold">Terminal</th>
-                    <th className="px-6 py-4 font-semibold hidden md:table-cell">Opened</th>
-                    <th className="px-6 py-4 font-semibold hidden md:table-cell">Closed</th>
-                    <th className="px-6 py-4 font-semibold text-right">Opening Float</th>
-                    <th className="px-6 py-4 font-semibold text-right">Expected</th>
-                    <th className="px-6 py-4 font-semibold text-right">Closing Count</th>
-                    <th className="px-6 py-4 font-semibold text-right">Variance</th>
-                    <th className="px-6 py-4 font-semibold text-center">Status</th>
+                    <th className="px-6 py-4 font-semibold">{t('table.number')}</th>
+                    <th className="px-6 py-4 font-semibold">{t('table.customer')}</th>
+                    <th className="px-6 py-4 font-semibold hidden md:table-cell">{t('table.invoiceDate')}</th>
+                    <th className="px-6 py-4 font-semibold hidden md:table-cell">{t('table.dueDate')}</th>
+                    <th className="px-6 py-4 font-semibold text-right rtl:text-left">{t('table.taxExcluded')}</th>
+                    <th className="px-6 py-4 font-semibold text-right rtl:text-left">{t('table.total')}</th>
+                    <th className="px-6 py-4 font-semibold text-right rtl:text-left hidden lg:table-cell">{t('table.paidAmount')}</th>
+                    <th className="px-6 py-4 font-semibold text-right rtl:text-left hidden lg:table-cell">{t('table.dueAmount')}</th>
+                    <th className="px-6 py-4 font-semibold text-center">{t('table.status')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {loadingInvoices ? (
+                    <tr><td colSpan={9} className="px-6 py-12 text-center text-muted-foreground">{t('table.loadingInvoices')}</td></tr>
+                  ) : invoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-6 py-12 text-center text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center">
+                          <FileText className="h-10 w-10 mb-3 opacity-20" />
+                          <span>{t('table.noInvoicesFound')}</span>
+                          <button
+                            onClick={() => {
+                              setSelectedInvoiceId(null);
+                              setInvoiceDetailOpen(true);
+                            }}
+                            className="mt-3 px-3.5 py-1.5 bg-brand-500 text-white rounded-lg text-xs font-semibold hover:bg-brand-600 transition-colors shadow-sm"
+                          >
+                            {t('table.createNewInvoice')}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    invoices.map((inv) => (
+                      <tr
+                        key={inv.id}
+                        onClick={() => {
+                          setSelectedInvoiceId(inv.id);
+                          setInvoiceDetailOpen(true);
+                        }}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors group"
+                      >
+                        <td className="px-6 py-4 font-mono font-bold text-foreground flex items-center gap-2">
+                          <FileText size={15} className="text-purple-500 opacity-60 group-hover:opacity-100" />
+                          {inv.invoice_number || (
+                            <span className="text-foreground/40 font-serif italic text-base">/</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-foreground">
+                          {inv.customer_name || t('table.walkIn')}
+                        </td>
+                        <td className="px-6 py-4 text-muted-foreground hidden md:table-cell text-xs">
+                          {inv.invoice_date ? formatDate(inv.invoice_date, locale) : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-muted-foreground hidden md:table-cell text-xs">
+                          {inv.due_date ? formatDate(inv.due_date, locale) : '-'}
+                        </td>
+                        <td className="px-6 py-4 text-right rtl:text-left font-mono text-muted-foreground">
+                          {formatMoney(Number(inv.subtotal || inv.total_amount), currency)}
+                        </td>
+                        <td className="px-6 py-4 text-right rtl:text-left font-mono font-bold text-foreground">
+                          {formatMoney(Number(inv.total_amount), currency)}
+                        </td>
+                        <td className="px-6 py-4 text-right rtl:text-left font-mono text-emerald-600 dark:text-emerald-400 hidden lg:table-cell">
+                          {formatMoney(Number(inv.amount_paid || 0), currency)}
+                        </td>
+                        <td className="px-6 py-4 text-right rtl:text-left font-mono font-bold hidden lg:table-cell">
+                          <span className={Number(inv.amount_due) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground/40'}>
+                            {formatMoney(Number(inv.amount_due || 0), currency)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {inv.status === 'PAID' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                              {t('filters.paid')}
+                            </span>
+                          ) : inv.status === 'POSTED' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                              {t('filters.posted')}
+                            </span>
+                          ) : inv.status === 'DRAFT' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
+                              {t('filters.draft')}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/30">
+                              {t('filters.cancelled')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {invoices.length > 0 && (
+                  <tfoot className="bg-background border-t-2 border-border font-bold text-xs">
+                    <tr>
+                      <td colSpan={5} className="px-6 py-3 text-right rtl:text-left uppercase tracking-wider text-muted-foreground">
+                        {t('table.totalsSummary', { count: invoices.length })}
+                      </td>
+                      <td className="px-6 py-3 text-right font-mono text-sm text-foreground">
+                        {formatMoney(
+                          invoices.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0),
+                          currency
+                        )}
+                      </td>
+                      <td className="px-6 py-3 text-right font-mono text-emerald-600 dark:text-emerald-400 hidden lg:table-cell">
+                        {formatMoney(
+                          invoices.reduce((sum, inv) => sum + Number(inv.amount_paid || 0), 0),
+                          currency
+                        )}
+                      </td>
+                      <td className="px-6 py-3 text-right font-mono text-amber-600 dark:text-amber-400 hidden lg:table-cell">
+                        {formatMoney(
+                          invoices.reduce((sum, inv) => sum + Number(inv.amount_due || 0), 0),
+                          currency
+                        )}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          )}
+
+          {/* TAB 3: SESSIONS & SHIFTS (Odoo /odoo/pos-sessions parity) */}
+          {activeTab === 'sessions' && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left rtl:text-right text-sm whitespace-nowrap">
+                <thead className="bg-background text-xs uppercase text-muted-foreground border-b border-border">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">{t('table.sessionId')}</th>
+                    <th className="px-6 py-4 font-semibold">{t('table.pointOfSale')}</th>
+                    <th className="px-6 py-4 font-semibold">{t('table.openedBy')}</th>
+                    <th className="px-6 py-4 font-semibold hidden md:table-cell">{t('table.openingDate')}</th>
+                    <th className="px-6 py-4 font-semibold hidden md:table-cell">{t('table.closingDate')}</th>
+                    <th className="px-6 py-4 font-semibold text-right rtl:text-left">{t('table.startingBalance')}</th>
+                    <th className="px-6 py-4 font-semibold text-right rtl:text-left">{t('table.endingBalance')}</th>
+                    <th className="px-6 py-4 font-semibold text-right rtl:text-left">{t('table.theoretical')}</th>
+                    <th className="px-6 py-4 font-semibold text-center">{t('table.status')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {loadingSessions ? (
-                    <tr><td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">Loading cash shifts...</td></tr>
+                    <tr><td colSpan={9} className="px-6 py-12 text-center text-muted-foreground">{t('table.loadingShifts')}</td></tr>
                   ) : sessions.length === 0 ? (
-                    <tr><td colSpan={8} className="px-6 py-12 text-center text-muted-foreground flex flex-col items-center justify-center">
+                    <tr><td colSpan={9} className="px-6 py-12 text-center text-muted-foreground flex flex-col items-center justify-center">
                       <Calculator className="h-10 w-10 mb-3 opacity-20" />
-                      No cash register sessions found.
+                      {t('table.noSessionsFound')}
                     </td></tr>
                   ) : (
                     sessions.map(s => {
                       const variance = s.variance !== null && s.variance !== undefined ? Number(s.variance) : null;
                       const hasVariance = variance !== null;
                       const isBalanced = hasVariance && Math.abs(variance) < 0.001;
-                      const isOver = hasVariance && variance > 0.001;
-                      const isShort = hasVariance && variance < -0.001;
 
                       return (
                         <tr 
@@ -346,50 +669,51 @@ export default function SalesHistoryPage() {
                           onClick={() => openSessionDetails(s)}
                           className="hover:bg-gray-50 dark:hover:bg-gray-800/30 cursor-pointer transition-colors group"
                         >
-                          <td className="px-6 py-4 font-medium text-foreground flex items-center gap-2">
-                            <Calculator className="h-4 w-4 text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            {s.terminal_name || 'Main Register'}
+                          <td className="px-6 py-4 font-mono font-bold text-foreground">
+                            {s.session_code || `REG/${s.id.substring(0, 5).toUpperCase()}`}
+                          </td>
+                          <td className="px-6 py-4 font-medium text-foreground">
+                            {s.terminal_name || t('table.mainRegister')}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-pos-500 text-white flex items-center justify-center font-bold text-[10px]">
+                                {(s.cashier_name || 'C')[0].toUpperCase()}
+                              </div>
+                              <span className="font-medium text-foreground text-xs">{s.cashier_name || t('table.cashier')}</span>
+                            </div>
                           </td>
                           <td className="px-6 py-4 text-muted-foreground hidden md:table-cell">
-                            {s.opened_at ? format(new Date(s.opened_at), 'MMM dd, yyyy - hh:mm a') : '-'}
+                            {s.opened_at ? formatDateTime(s.opened_at, locale) : '-'}
                           </td>
                           <td className="px-6 py-4 text-muted-foreground hidden md:table-cell">
-                            {s.closed_at ? format(new Date(s.closed_at), 'MMM dd, yyyy - hh:mm a') : (
-                              <span className="text-emerald-500 font-medium">In Progress</span>
+                            {s.closed_at ? formatDateTime(s.closed_at, locale) : (
+                              <span className="text-emerald-500 font-semibold">{t('filters.inProgress')}</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-right font-medium text-foreground">
-                            {currency} {Number(s.opening_amount).toFixed(2)}
+                          <td className="px-6 py-4 text-right rtl:text-left font-medium text-foreground">
+                            {formatMoney(Number(s.opening_amount), currency)}
                           </td>
-                          <td className="px-6 py-4 text-right font-medium text-foreground">
-                            {s.expected_amount !== null && s.expected_amount !== undefined
-                              ? `${currency} ${Number(s.expected_amount).toFixed(2)}`
-                              : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-right font-bold text-foreground">
+                          <td className="px-6 py-4 text-right rtl:text-left font-bold text-foreground">
                             {s.closing_amount !== null && s.closing_amount !== undefined
-                              ? `${currency} ${Number(s.closing_amount).toFixed(2)}`
+                              ? formatMoney(Number(s.closing_amount), currency)
                               : '-'}
                           </td>
-                          <td className="px-6 py-4 text-right font-bold">
-                            {hasVariance ? (
-                              isBalanced ? (
-                                <span className="text-emerald-600 dark:text-emerald-400">0.00</span>
-                              ) : isOver ? (
-                                <span className="text-emerald-600 dark:text-emerald-400">+{currency} {variance.toFixed(2)}</span>
-                              ) : (
-                                <span className="text-rose-600 dark:text-rose-400">-{currency} {Math.abs(variance).toFixed(2)}</span>
-                              )
-                            ) : '-'}
+                          <td className="px-6 py-4 text-right rtl:text-left font-medium text-foreground">
+                            {s.expected_amount !== null && s.expected_amount !== undefined
+                              ? formatMoney(Number(s.expected_amount), currency)
+                              : '-'}
                           </td>
                           <td className="px-6 py-4 text-center">
                             {s.status === 'OPEN' ? (
                               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Open
+                                {t('filters.inProgress')}
                               </span>
                             ) : (
-                              <Badge variant="default">Closed</Badge>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                {t('filters.closedPosted')}
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -398,6 +722,99 @@ export default function SalesHistoryPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* TAB 4: PAYMENTS LEDGER (Odoo /odoo/action-431 parity) */}
+          {activeTab === 'payments' && (
+            <div className="overflow-x-auto p-4 space-y-4">
+              {loadingPayments ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                  <RefreshCw className="w-6 h-6 animate-spin text-brand-500" />
+                  <span>{t('table.loadingPayments')}</span>
+                </div>
+              ) : paymentsLedger.length === 0 ? (
+                <div className="py-12 flex flex-col items-center justify-center text-muted-foreground">
+                  <CreditCard className="h-10 w-10 mb-3 opacity-20" />
+                  {t('table.noPaymentsFound')}
+                </div>
+              ) : (
+                paymentsLedger.map((grp: any) => {
+                  const isExpanded = expandedGroups[grp.payment_method] !== false;
+
+                  return (
+                    <div key={grp.payment_method} className="rounded-xl border border-border bg-background overflow-hidden shadow-sm">
+                      {/* Group Header (Odoo style: ▾ Bankak (5) - 35,560,100.00 SDG) */}
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(grp.payment_method)}
+                        className="w-full flex items-center justify-between p-3.5 px-5 bg-surface/70 hover:bg-surface border-b border-border transition-colors text-left rtl:text-right"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {isExpanded ? <ChevronDown size={18} className="text-foreground/60" /> : <ChevronRight size={18} className="text-foreground/60 rtl:rotate-180" />}
+                          <span className="font-extrabold text-sm text-foreground">
+                            {getPaymentMethodLabel(grp.payment_method) || grp.display_name}
+                          </span>
+                          <span className="text-xs text-foreground/50 font-semibold bg-background px-2 py-0.5 rounded-full border border-border">
+                            {t('table.transactionCount', { count: grp.transaction_count })}
+                          </span>
+                        </div>
+                        <span className="font-black text-sm text-pos-600 dark:text-pos-300">
+                          {formatMoney(Number(grp.total_amount), currency)}
+                        </span>
+                      </button>
+
+                      {/* Items Table */}
+                      {isExpanded && (
+                        <table className="w-full text-left rtl:text-right text-xs whitespace-nowrap">
+                          <thead className="bg-background text-foreground/60 uppercase border-b border-border/80">
+                            <tr>
+                              <th className="px-5 py-2.5 font-semibold">{t('table.dateTime')}</th>
+                              <th className="px-5 py-2.5 font-semibold">{t('table.orderInvoiceRef')}</th>
+                              <th className="px-5 py-2.5 font-semibold">{t('table.employee')}</th>
+                              <th className="px-5 py-2.5 font-semibold hidden md:table-cell">{t('table.referenceCode')}</th>
+                              <th className="px-5 py-2.5 font-semibold text-right rtl:text-left">{t('table.amount')}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/60">
+                            {grp.payments
+                              .filter((p: any) => {
+                                if (!paymentSearch) return true;
+                                const q = paymentSearch.toLowerCase();
+                                return (
+                                  p.invoice_number.toLowerCase().includes(q) ||
+                                  p.employee_name.toLowerCase().includes(q) ||
+                                  (p.reference && p.reference.toLowerCase().includes(q))
+                                );
+                              })
+                              .map((p: any) => (
+                                <tr key={p.id} className="hover:bg-surface/50 transition-colors">
+                                  <td className="px-5 py-2.5 text-muted-foreground font-medium">
+                                    {p.created_at ? formatDateTime(p.created_at, locale) : '-'}
+                                  </td>
+                                  <td className="px-5 py-2.5 font-bold text-foreground">
+                                    <span className="text-brand-500 hover:underline cursor-pointer">
+                                      {p.invoice_number}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-2.5 text-foreground font-medium">
+                                    {p.employee_name}
+                                  </td>
+                                  <td className="px-5 py-2.5 text-muted-foreground font-mono hidden md:table-cell">
+                                    {p.reference || '—'}
+                                  </td>
+                                  <td className="px-5 py-2.5 text-right rtl:text-left font-black text-foreground">
+                                    {formatMoney(Number(p.amount), currency)}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
         </div>
@@ -414,12 +831,12 @@ export default function SalesHistoryPage() {
                   <div>
                     <Dialog.Title className="text-xl font-bold text-foreground flex items-center gap-2">
                       {selectedSale.invoice_number}
-                      {selectedSale.status === 'RETURNED' && <Badge variant="danger">Fully Refunded</Badge>}
-                      {selectedSale.status === 'PARTIALLY_RETURNED' && <Badge variant="warning">Partially Returned</Badge>}
-                      {selectedSale.status === 'COMPLETED' && <Badge variant="success">Completed</Badge>}
+                      {selectedSale.status === 'RETURNED' && <Badge variant="danger">{t('details.fullyRefunded')}</Badge>}
+                      {selectedSale.status === 'PARTIALLY_RETURNED' && <Badge variant="warning">{t('filters.partiallyReturned')}</Badge>}
+                      {selectedSale.status === 'COMPLETED' && <Badge variant="success">{t('filters.completed')}</Badge>}
                     </Dialog.Title>
-                    <Dialog.Description className="text-sm text-muted-foreground mt-1">
-                      {selectedSale.created_at ? format(new Date(selectedSale.created_at), 'PPP at p') : ''}
+                    <Dialog.Description className="text-xs text-muted-foreground mt-1">
+                      {selectedSale.created_at ? formatDateTime(selectedSale.created_at, locale) : ''}
                     </Dialog.Description>
                   </div>
                   <Dialog.Close asChild>
@@ -430,181 +847,97 @@ export default function SalesHistoryPage() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-background rounded-lg p-4 border border-border">
-                      <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Customer</p>
-                      <p className="text-sm font-semibold text-foreground truncate">
-                        {selectedSale.customer?.name || 'Walk-in Customer'}
-                      </p>
+                  {/* Summary Card */}
+                  <div className="bg-background rounded-xl p-4 border border-border space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">{t('details.customer')}</span>
+                      <span className="font-semibold text-foreground">{selectedSale.customer?.name || t('table.walkIn')}</span>
                     </div>
-                    <div className="bg-background rounded-lg p-4 border border-border">
-                      <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Payment</p>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-semibold text-foreground uppercase">
-                          {selectedSale.payment_method}
-                        </p>
-                        {selectedSale.payment_method === 'SPLIT' && (
-                          <Badge variant="warning" className="text-[10px] px-1.5 py-0.5">SPLIT</Badge>
-                        )}
-                      </div>
-                      {selectedSale.payments && selectedSale.payments.length > 0 && (
-                        <div className="mt-2 space-y-1 border-t border-border/50 pt-2 text-xs">
-                          {selectedSale.payments.map((p: any, idx: number) => (
-                            <div key={idx} className="flex justify-between items-center text-muted-foreground">
-                              <span>
-                                {p.payment_method}
-                                {p.reference ? ` (${p.reference})` : ''}:
-                              </span>
-                              <span className="font-semibold text-foreground">{currency} {Number(p.amount).toFixed(2)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">{t('details.paymentTender')}</span>
+                      <span className="font-semibold text-foreground uppercase">{getPaymentMethodLabel(selectedSale.payment_method)}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm pt-2 border-t border-border">
+                      <span className="font-bold text-foreground">{t('details.totalAmount')}</span>
+                      <span className="text-lg font-black text-brand-500">{formatMoney(Number(selectedSale.total_amount), currency)}</span>
                     </div>
                   </div>
 
-                  {/* Items List */}
-                  <div>
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-4">Receipt Items</h3>
-                    <div className="space-y-3">
-                      {selectedSale.items?.map((item: any, i: number) => {
-                        const originalQty = Number(item.quantity) || 0;
-                        const returnedQty = Number(item.quantity_returned) || 0;
-                        const remainingQty = Math.max(0, originalQty - returnedQty);
-
-                        return (
-                          <div key={i} className="flex justify-between items-start py-2.5 border-b border-border/50 last:border-0">
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                {item.medicine_name || item.medicine?.name_en || `Medicine #${item.medicine_id.substring(0,8)}`}
-                              </p>
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                                {item.batch_number && (
-                                  <span className="font-mono bg-background px-1.5 py-0.5 rounded border border-border">
-                                    {item.batch_number}
-                                  </span>
-                                )}
-                                <span>{originalQty} sold @ {currency} {Number(item.unit_price).toFixed(2)}</span>
-                                {returnedQty > 0 && (
-                                  <span className="text-amber-500 font-semibold">
-                                    ({returnedQty} returned)
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-bold text-foreground">{currency} {Number(item.line_total).toFixed(2)}</p>
-                              {returnedQty > 0 && remainingQty > 0 && (
-                                <p className="text-[11px] text-muted-foreground">{remainingQty} remaining</p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      
-                      {!selectedSale.items?.length && (
-                        <div className="py-4 text-center text-sm text-muted-foreground">Loading items...</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Returns History Section if any returns exist */}
-                  {selectedSale.returns && selectedSale.returns.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                        <RotateCcw size={15} />
-                        Return Audit History ({selectedSale.returns.length})
-                      </div>
-
-                      <div className="space-y-3">
-                        {selectedSale.returns.map((ret: any) => (
-                          <div key={ret.id} className="rounded-xl bg-background border border-border p-3.5 space-y-2 text-xs">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 font-mono font-bold text-foreground">
-                                <span className="text-brand-500">{ret.return_number}</span>
-                                <Badge variant="outline" className="uppercase text-[10px]">{ret.refund_method}</Badge>
-                              </div>
-                              <span className="font-bold text-rose-500 text-sm">
-                                -{currency} {Number(ret.total_refund).toFixed(2)}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between text-muted-foreground">
-                              <span>{ret.created_at ? format(new Date(ret.created_at), 'MMM dd, yyyy - hh:mm a') : '-'}</span>
-                              {ret.reason && <span className="italic truncate max-w-[180px]">{ret.reason}</span>}
-                            </div>
-
-                            {/* Returned item pills */}
-                            {ret.items && ret.items.length > 0 && (
-                              <div className="pt-2 border-t border-border/50 space-y-1.5">
-                                {ret.items.map((rit: any) => (
-                                  <div key={rit.id} className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5 truncate max-w-[200px]">
-                                      <span className="font-medium text-foreground">{rit.medicine_name || 'Item'}:</span>
-                                      <span className="text-muted-foreground">{rit.quantity} returned</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <span className={cn(
-                                        "px-1.5 py-0.5 rounded text-[10px] font-semibold border",
-                                        rit.condition === 'GOOD' ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"
-                                      )}>
-                                        {rit.condition}
-                                      </span>
-                                      <span className={cn(
-                                        "px-1.5 py-0.5 rounded text-[10px] font-semibold border",
-                                        rit.disposition === 'RESTOCK' ? "bg-blue-500/10 text-blue-500 border-blue-500/20" : "bg-purple-500/10 text-purple-500 border-purple-500/20"
-                                      )}>
-                                        {rit.disposition}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                  {/* Multi-tender Payment breakdown if split */}
+                  {selectedSale.payments && selectedSale.payments.length > 0 && (
+                    <div className="rounded-xl border border-border bg-background p-4 space-y-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
+                        {t('details.paymentsReceived')}
+                      </span>
+                      <div className="space-y-1.5 text-xs">
+                        {selectedSale.payments.map((p: any) => (
+                          <div key={p.id} className="flex justify-between items-center py-1 border-b border-border/40 last:border-b-0">
+                            <span className="font-semibold text-foreground">{getPaymentMethodLabel(p.payment_method)}</span>
+                            <span className="font-bold text-foreground">{formatMoney(Number(p.amount), currency)}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Totals */}
-                  <div className="bg-background rounded-lg p-5 border border-border">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm text-muted-foreground">Original Total</span>
-                      <span className="text-sm text-foreground">{currency} {Number(selectedSale.total_amount).toFixed(2)}</span>
-                    </div>
-                    {Boolean(selectedSale.returns && selectedSale.returns.length > 0) && (
-                      <div className="flex justify-between items-center mb-2 text-rose-500">
-                        <span className="text-sm font-medium">Total Refunded</span>
-                        <span className="text-sm font-semibold">
-                          -{currency} {selectedSale.returns.reduce((sum: number, r: any) => sum + Number(r.total_refund || 0), 0).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center py-2 border-t border-border mt-2">
-                      <span className="text-lg font-bold text-foreground">Net Retained</span>
-                      <span className="text-lg font-black text-brand-400">
-                        {currency} {(Number(selectedSale.total_amount) - (selectedSale.returns?.reduce((sum: number, r: any) => sum + Number(r.total_refund || 0), 0) || 0)).toFixed(2)}
-                      </span>
+                  {/* Items List */}
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">{t('details.itemsSold')}</h3>
+                    <div className="space-y-2">
+                      {selectedSale.items?.map((item: any) => (
+                        <div key={item.id} className="p-3 rounded-xl bg-background border border-border flex items-center justify-between text-xs">
+                          <div>
+                            <p className="font-semibold text-foreground">{item.medicine_name || item.name || 'Medicine'}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {Number(item.quantity)} × {formatMoney(Number(item.unit_price), currency)}
+                            </p>
+                          </div>
+                          <span className="font-bold text-foreground">{formatMoney(Number(item.line_total), currency)}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
 
-                {/* Footer Action */}
-                <div className="flex-none p-6 border-t border-border bg-background/50">
-                  {selectedSale.status !== 'RETURNED' ? (
+                <div className="p-6 border-t border-border bg-background/50 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setA4InvoiceData(selectedSale);
+                      setA4ModalOpen(true);
+                    }}
+                    className="flex-1 py-2 px-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                  >
+                    <FileText size={14} />
+                    <span>{t('details.printA4')}</span>
+                  </button>
+                  {!selectedSale.is_invoiced && (
                     <button
-                      onClick={() => setReturnModalOpen(true)}
-                      className="w-full flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white font-medium py-3 rounded-xl transition-all shadow-md shadow-brand-500/20"
+                      onClick={async () => {
+                        try {
+                          const inv: any = await api.generateInvoiceFromPosSale(selectedSale.id);
+                          toast.success(`Generated official invoice ${inv.invoice_number}!`);
+                          setA4InvoiceData(inv);
+                          setA4ModalOpen(true);
+                          fetchSales();
+                        } catch (err: any) {
+                          toast.error(err.message || 'Failed to generate invoice');
+                        }
+                      }}
+                      className="py-2 px-3 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                      title="Generate official tax invoice"
                     >
-                      <RotateCcw className="h-5 w-5" /> Process Return / Refund
+                      <Plus size={14} />
+                      <span>{t('details.postInvoice')}</span>
                     </button>
-                  ) : (
-                    <div className="w-full flex items-center justify-center gap-2 bg-gray-200 dark:bg-gray-800 text-muted-foreground font-medium py-3 rounded-xl">
-                      <AlertCircle className="h-5 w-5" /> Fully Refunded
-                    </div>
                   )}
+                  <button
+                    onClick={() => setReturnModalOpen(true)}
+                    disabled={selectedSale.status === 'RETURNED'}
+                    className="py-2 px-3 rounded-xl border border-border bg-surface hover:bg-background text-foreground text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40 transition-colors"
+                  >
+                    <RotateCcw size={14} />
+                    <span>{t('details.refund')}</span>
+                  </button>
                 </div>
               </>
             )}
@@ -612,7 +945,7 @@ export default function SalesHistoryPage() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      {/* Cash Session Details Slide-over */}
+      {/* Session Details Slide-over (Enhanced with Multi-Tender Breakdown & Cashier) */}
       <Dialog.Root open={sessionDetailsOpen} onOpenChange={setSessionDetailsOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
@@ -622,17 +955,15 @@ export default function SalesHistoryPage() {
                 <div className="flex-none flex items-center justify-between p-6 border-b border-border bg-background/50">
                   <div>
                     <Dialog.Title className="text-xl font-bold text-foreground flex items-center gap-2">
-                      <Calculator className="w-5 h-5 text-brand-500" />
-                      {selectedSession.terminal_name || 'Register Shift'}
+                      <span>{selectedSession.session_code || selectedSession.terminal_name}</span>
                       {selectedSession.status === 'OPEN' ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-semibold border border-emerald-500/20">Open</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-semibold border border-emerald-500/20">{t('filters.inProgress')}</span>
                       ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-surface text-foreground/70 font-semibold border border-border">Closed</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-surface text-foreground/70 font-semibold border border-border">{t('filters.closedPosted')}</span>
                       )}
                     </Dialog.Title>
                     <Dialog.Description className="text-xs text-muted-foreground mt-1">
-                      Opened: {selectedSession.opened_at ? format(new Date(selectedSession.opened_at), 'PPP p') : '-'}
-                      {selectedSession.closed_at ? ` • Closed: ${format(new Date(selectedSession.closed_at), 'PPP p')}` : ''}
+                      {t('table.cashier')}: <span className="font-semibold text-foreground">{selectedSession.cashier_name || t('table.cashier')}</span> • {t('table.openingDate')}: {selectedSession.opened_at ? formatDateTime(selectedSession.opened_at, locale) : '-'}
                     </Dialog.Description>
                   </div>
                   <Dialog.Close asChild>
@@ -642,7 +973,7 @@ export default function SalesHistoryPage() {
                   </Dialog.Close>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto p-6 space-y-5">
                   {loadingSessionSummary ? (
                     <div className="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
                       <RefreshCw className="w-6 h-6 animate-spin text-brand-500" />
@@ -653,38 +984,38 @@ export default function SalesHistoryPage() {
                       {/* Financial Reconciliation Breakdown */}
                       <div className="bg-background rounded-xl p-4 border border-border space-y-2.5">
                         <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
-                          Drawer Reconciliation
+                          Drawer Reconciliation (Cash)
                         </span>
 
                         <div className="space-y-1.5 text-sm">
                           <div className="flex justify-between items-center text-foreground/80">
                             <span>Opening Float</span>
-                            <span className="font-semibold">{currency} {Number(sessionSummary?.opening_amount || selectedSession.opening_amount).toFixed(2)}</span>
+                            <span className="font-semibold">{formatMoney(Number(sessionSummary?.opening_amount || selectedSession.opening_amount), currency)}</span>
                           </div>
 
                           <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400">
                             <span className="flex items-center gap-1"><ArrowDownCircle size={14} /> Cash Sales</span>
-                            <span className="font-semibold">+{currency} {Number(sessionSummary?.total_cash_sales || 0).toFixed(2)}</span>
+                            <span className="font-semibold">+{formatMoney(Number(sessionSummary?.total_cash_sales || 0), currency)}</span>
                           </div>
 
                           {Boolean(Number(sessionSummary?.total_cash_refunds || 0)) && (
                             <div className="flex justify-between items-center text-rose-600 dark:text-rose-400">
                               <span className="flex items-center gap-1"><ArrowUpCircle size={14} /> Cash Refunds</span>
-                              <span className="font-semibold">-{currency} {Number(sessionSummary?.total_cash_refunds).toFixed(2)}</span>
+                              <span className="font-semibold">-{formatMoney(Number(sessionSummary?.total_cash_refunds), currency)}</span>
                             </div>
                           )}
 
                           {Boolean(Number(sessionSummary?.total_cash_in || 0)) && (
                             <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400">
                               <span className="flex items-center gap-1"><ArrowDownCircle size={14} /> Cash In (Deposits)</span>
-                              <span className="font-semibold">+{currency} {Number(sessionSummary?.total_cash_in).toFixed(2)}</span>
+                              <span className="font-semibold">+{formatMoney(Number(sessionSummary?.total_cash_in), currency)}</span>
                             </div>
                           )}
 
                           {Boolean(Number(sessionSummary?.total_cash_out || 0)) && (
                             <div className="flex justify-between items-center text-rose-600 dark:text-rose-400">
                               <span className="flex items-center gap-1"><ArrowUpCircle size={14} /> Cash Out (Expenses)</span>
-                              <span className="font-semibold">-{currency} {Number(sessionSummary?.total_cash_out).toFixed(2)}</span>
+                              <span className="font-semibold">-{formatMoney(Number(sessionSummary?.total_cash_out), currency)}</span>
                             </div>
                           )}
                         </div>
@@ -692,14 +1023,14 @@ export default function SalesHistoryPage() {
                         <div className="pt-2 border-t border-border flex justify-between items-center text-sm font-bold">
                           <span>Expected Cash in Drawer</span>
                           <span className="text-brand-500 font-extrabold">
-                            {currency} {Number(sessionSummary?.expected_amount || 0).toFixed(2)}
+                            {formatMoney(Number(sessionSummary?.expected_amount || 0), currency)}
                           </span>
                         </div>
 
                         {selectedSession.closing_amount !== null && (
                           <div className="flex justify-between items-center text-sm font-bold pt-1">
                             <span>Actual Counted Cash</span>
-                            <span>{currency} {Number(selectedSession.closing_amount).toFixed(2)}</span>
+                            <span>{formatMoney(Number(selectedSession.closing_amount), currency)}</span>
                           </div>
                         )}
 
@@ -721,88 +1052,93 @@ export default function SalesHistoryPage() {
                             </span>
                             <span className="text-sm font-extrabold">
                               {Number(selectedSession.variance) > 0 ? '+' : ''}
-                              {currency} {Number(selectedSession.variance).toFixed(2)}
+                              {formatMoney(Number(selectedSession.variance), currency)}
                             </span>
                           </div>
                         )}
                       </div>
 
-                      {/* Digital & Non-cash Sales */}
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div className="p-3 rounded-xl bg-background border border-border">
-                          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-                            <CreditCard size={14} className="text-blue-500" />
-                            <span>Card & Digital</span>
-                          </div>
-                          <span className="text-sm font-bold text-foreground">
-                            {currency} {Number(sessionSummary?.total_card_sales || 0).toFixed(2)}
+                      {/* Multi-Tender Payments Breakdown (Matching Odoo) */}
+                      {sessionSummary?.payments_breakdown && sessionSummary.payments_breakdown.length > 0 && (
+                        <div className="rounded-xl border border-border bg-background p-4 space-y-2.5">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
+                            All Shift Payments by Tender
                           </span>
+                          <div className="space-y-1.5 text-xs">
+                            {sessionSummary.payments_breakdown.map((pm: any) => (
+                              <div key={pm.payment_method} className="flex justify-between items-center py-1 border-b border-border/40 last:border-b-0">
+                                <div>
+                                  <span className="font-bold text-foreground">{pm.display_name}</span>
+                                  <span className="text-muted-foreground ml-1">({pm.orders_count} orders)</span>
+                                </div>
+                                <span className="font-extrabold text-foreground">{formatMoney(Number(pm.expected_amount), currency)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
+                      )}
 
+                      {/* Opening Handover Note */}
+                      {selectedSession.opening_notes && (
                         <div className="p-3 rounded-xl bg-background border border-border">
-                          <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-                            <Receipt size={14} className="text-purple-500" />
-                            <span>Total Receipts</span>
-                          </div>
-                          <span className="text-sm font-bold text-foreground">
-                            {sessionSummary?.total_sales_count || 0} sales
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                            Opening Handover Note
                           </span>
+                          <p className="text-xs text-foreground italic">"{selectedSession.opening_notes}"</p>
                         </div>
-                      </div>
+                      )}
+
+                      {/* Closing Note */}
+                      {selectedSession.notes && (
+                        <div className="p-3 rounded-xl bg-background border border-border">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                            Closing Reconciliation Note
+                          </span>
+                          <p className="text-xs text-foreground italic">"{selectedSession.notes}"</p>
+                        </div>
+                      )}
 
                       {/* Cash Movements Timeline */}
                       <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                          Cash Movements During Shift ({sessionSummary?.movements?.length || 0})
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                          Cash Movements ({sessionSummary?.movements?.length || 0})
                         </h4>
                         {!sessionSummary?.movements || sessionSummary.movements.length === 0 ? (
-                          <div className="p-4 rounded-xl bg-background border border-border text-center text-xs text-muted-foreground">
-                            No manual cash-in or cash-out recorded for this shift.
+                          <div className="p-3 rounded-xl bg-background border border-border text-center text-xs text-muted-foreground">
+                            No cash-in or cash-out recorded for this shift.
                           </div>
                         ) : (
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             {sessionSummary.movements.map((m: any) => (
-                              <div key={m.id} className="p-3 rounded-xl bg-background border border-border flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-2.5">
+                              <div key={m.id} className="p-2.5 rounded-xl bg-background border border-border flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2">
                                   {m.movement_type === 'CASH_IN' ? (
-                                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                                      <ArrowDownCircle size={15} />
+                                    <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                                      <ArrowDownCircle size={14} />
                                     </div>
                                   ) : (
-                                    <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-600 flex items-center justify-center shrink-0">
-                                      <ArrowUpCircle size={15} />
+                                    <div className="w-6 h-6 rounded-lg bg-rose-500/10 text-rose-600 flex items-center justify-center shrink-0">
+                                      <ArrowUpCircle size={14} />
                                     </div>
                                   )}
                                   <div>
                                     <p className="font-semibold text-foreground">{m.reason}</p>
                                     <p className="text-[10px] text-muted-foreground">
-                                      {m.created_at ? format(new Date(m.created_at), 'hh:mm a') : ''} • {m.movement_type === 'CASH_IN' ? 'Deposit' : 'Expense'}
+                                      {m.created_at ? format(new Date(m.created_at), 'hh:mm a') : ''}
                                     </p>
                                   </div>
                                 </div>
                                 <span className={cn(
-                                  "font-bold text-sm",
+                                  "font-bold text-xs",
                                   m.movement_type === 'CASH_IN' ? "text-emerald-600" : "text-rose-600"
                                 )}>
-                                  {m.movement_type === 'CASH_IN' ? '+' : '-'}{currency} {Number(m.amount).toFixed(2)}
+                                  {m.movement_type === 'CASH_IN' ? '+' : '-'}{formatMoney(Number(m.amount), currency)}
                                 </span>
                               </div>
                             ))}
                           </div>
                         )}
                       </div>
-
-                      {/* Cashier Notes */}
-                      {selectedSession.notes && (
-                        <div className="p-3 rounded-xl bg-background border border-border">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">
-                            Shift Notes & Variance Reason
-                          </span>
-                          <p className="text-xs text-foreground italic">
-                            "{selectedSession.notes}"
-                          </p>
-                        </div>
-                      )}
                     </>
                   )}
                 </div>
@@ -812,7 +1148,7 @@ export default function SalesHistoryPage() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      {/* Sales Return & Condition Inspection Modal */}
+      {/* Sales Return Modal */}
       <ReturnModal
         isOpen={returnModalOpen}
         onClose={() => setReturnModalOpen(false)}
@@ -822,6 +1158,32 @@ export default function SalesHistoryPage() {
           setSelectedSale(updatedSale);
           fetchSales();
         }}
+      />
+
+      {/* Odoo Parity Customer Invoice Modals */}
+      <InvoiceDetailModal
+        open={invoiceDetailOpen}
+        onClose={() => setInvoiceDetailOpen(false)}
+        invoiceId={selectedInvoiceId}
+        onRefresh={() => {
+          fetchInvoices();
+          fetchSales();
+        }}
+      />
+
+      <InvoiceSettingsModal
+        open={invoiceSettingsOpen}
+        onClose={() => setInvoiceSettingsOpen(false)}
+        onSaved={fetchInvoices}
+      />
+
+      <A4InvoiceModal
+        open={a4ModalOpen}
+        onClose={() => {
+          setA4ModalOpen(false);
+          setA4InvoiceData(null);
+        }}
+        invoiceData={a4InvoiceData}
       />
     </div>
   );

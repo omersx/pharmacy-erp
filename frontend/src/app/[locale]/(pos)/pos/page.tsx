@@ -17,7 +17,8 @@ import { BarcodeScanner } from '@/components/ui/barcode-scanner';
 import { useScanFeedback } from '@/components/ui/scan-feedback';
 import { useBarcodeScanner, type BarcodeKeyDebug } from '@/hooks/use-barcode-scanner';
 import { ScannerDiagnosticsModal } from '@/components/pos/ScannerDiagnosticsModal';
-import { ConnectionBadge, PendingSyncBadge, WakeLockButton, TerminalDiagnosticsModal } from '@/components/pwa';
+import { TerminalDiagnosticsModal } from '@/components/pwa';
+import { useWakeLock } from '@/hooks/use-wake-lock';
 import { CatalogStaleBanner } from '@/components/pos/CatalogStaleBanner';
 import { LockScreen } from '@/components/pos/LockScreen';
 import { SetPinModal } from '@/components/pos/SetPinModal';
@@ -50,12 +51,26 @@ import toast from 'react-hot-toast';
 export default function PosPage() {
   return (
     <CashSessionGuard>
-      {(session) => <PosContent session={session} />}
+      {(session, openRegisterModal, onSessionClosed) => (
+        <PosContent
+          session={session}
+          onOpenRegister={openRegisterModal}
+          onSessionClosed={onSessionClosed}
+        />
+      )}
     </CashSessionGuard>
   );
 }
 
-function PosContent({ session }: { session: { id: string; opening_amount: number; opened_at: string } }) {
+function PosContent({
+  session,
+  onOpenRegister,
+  onSessionClosed,
+}: {
+  session: { id: string; session_code?: string; opening_amount: number; opened_at: string };
+  onOpenRegister: () => void;
+  onSessionClosed: () => void;
+}) {
   const [search, setSearch] = useState('');
   const [paymentMode, setPaymentMode] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -72,6 +87,9 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
     lockOnVisibilityHidden: false,
     enabled: true,
   });
+
+  // Screen wake lock (silently keeps display active without visual clutter)
+  useWakeLock({ autoRequest: true });
   const [mobileTab, setMobileTab] = useState<'cart' | 'products'>('products');
   
   // Receipt State
@@ -99,13 +117,54 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
   const [categories, setCategories] = useState<string[]>(['All']);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fast initial render from IndexedDB cache (Stale-While-Revalidate)
+  useEffect(() => {
+    let active = true;
+    const loadCachedProducts = async () => {
+      try {
+        const cachedMeds = await db.medicines.toArray();
+        if (active && cachedMeds.length > 0) {
+          const cachedProducts: Product[] = cachedMeds.map((m) => ({
+            id: m.id,
+            medicine_id: m.id,
+            name: m.nameEn || m.nameAr || 'Unknown',
+            category: 'All',
+            price: Number(m.price) || 0,
+            stock: 999,
+            batch: '-',
+            lot_number: '-',
+            expiry: '-',
+            requires_prescription: m.requiresRx || false,
+            favorite: false,
+            barcode: m.barcode || '',
+            sku: m.id,
+          }));
+          setProducts((current) => (current.length === 0 ? cachedProducts : current));
+          setIsLoading(false);
+        }
+      } catch (err) {
+        // Cache read error fallback
+      }
+    };
+    loadCachedProducts();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const fetchPosData = useCallback(async () => {
     try {
-      setIsLoading(true);
-      const [medicines, stockItems, categoriesTree]: [any, any, any] = await Promise.all([
+      // Only show skeleton loader if no products have been loaded yet
+      setProducts((current) => {
+        if (current.length === 0) setIsLoading(true);
+        return current;
+      });
+
+      const [medicines, stockItems, categoriesTree, locationStocks]: [any, any, any, any] = await Promise.all([
         api.getMedicines().catch(() => []),
         api.getStock().catch(() => []),
-        api.getCategoryTree().catch(() => [])
+        api.getCategoryTree().catch(() => []),
+        api.getLocationStockSummary().catch(() => []),
       ]);
       
       const catMap = new Map<string, string>();
@@ -127,23 +186,40 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
           }
         });
       }
+
+      const locMap = new Map<string, { shelf: number; warehouse: number }>();
+      if (Array.isArray(locationStocks)) {
+        locationStocks.forEach((item: any) => {
+          if (item?.medicine_id) {
+            locMap.set(item.medicine_id, {
+              shelf: Number(item.shelf_stock || 0),
+              warehouse: Number(item.warehouse_stock || 0)
+            });
+          }
+        });
+      }
       
       const medList = Array.isArray(medicines) ? medicines : [];
-      const realProducts: Product[] = medList.map((med: any) => ({
-        id: med.id,
-        medicine_id: med.id,
-        name: med.name_en || med.name || 'Unknown',
-        category: med.category_id ? (catMap.get(med.category_id) || 'Other') : 'Other',
-        price: Number(med.selling_price) || 0,
-        stock: stockMap.get(med.id) || 0,
-        batch: '-',
-        lot_number: '-',
-        expiry: '-',
-        requires_prescription: med.requires_prescription || false,
-        favorite: false,
-        barcode: med.barcode || '',
-        sku: med.sku || ''
-      }));
+      const realProducts: Product[] = medList.map((med: any) => {
+        const loc = locMap.get(med.id);
+        return {
+          id: med.id,
+          medicine_id: med.id,
+          name: med.name_en || med.name || 'Unknown',
+          category: med.category_id ? (catMap.get(med.category_id) || 'Other') : 'Other',
+          price: Number(med.selling_price) || 0,
+          stock: stockMap.get(med.id) || 0,
+          shelf_stock: loc ? loc.shelf : undefined,
+          warehouse_stock: loc ? loc.warehouse : undefined,
+          batch: '-',
+          lot_number: '-',
+          expiry: '-',
+          requires_prescription: med.requires_prescription || false,
+          favorite: false,
+          barcode: med.barcode || '',
+          sku: med.sku || ''
+        };
+      });
       
       const catSet = new Set<string>(['All']);
       realProducts.forEach(p => catSet.add(p.category));
@@ -512,11 +588,11 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
           >
             Exit POS <span className="text-foreground/40 font-serif">→</span>
           </button>
-          {session?.id && (
-            <div className="hidden lg:flex items-center gap-2">
-              <div className="flex items-center gap-2 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium rounded-full">
+          {session?.id ? (
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="flex items-center gap-2 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold rounded-full">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Register Open</span>
+                <span>{session.session_code || 'Register Open'}</span>
               </div>
               <button
                 onClick={() => setCashMovementOpen(true)}
@@ -526,7 +602,23 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
                 <ArrowDownCircle size={13} className="text-emerald-500" />
                 <span>Cash In/Out</span>
               </button>
+              <button
+                onClick={() => setCloseSessionOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1 bg-orange-500/15 border border-orange-500/30 hover:bg-orange-500 hover:text-white text-orange-600 dark:text-orange-400 text-xs font-bold rounded-full transition-all shadow-sm"
+                title="Count tender and close register"
+              >
+                <Calculator size={13} />
+                <span>Close Register</span>
+              </button>
             </div>
+          ) : (
+            <button
+              onClick={onOpenRegister}
+              className="flex items-center gap-1.5 px-3 py-1 bg-[#714B67] hover:bg-[#5E3E56] text-white text-xs font-bold rounded-full transition-colors shadow-sm"
+            >
+              <Store size={13} />
+              <span>Open Register</span>
+            </button>
           )}
         </div>
 
@@ -536,39 +628,6 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
         </div>
 
         <div className="flex items-center gap-1.5 md:gap-3 flex-1 md:flex-none justify-end">
-          {/* Connection Status Badge & Pending Sync Count */}
-          <div className="hidden sm:flex items-center gap-1.5">
-            <WakeLockButton />
-            <PendingSyncBadge />
-            <ConnectionBadge />
-          </div>
-
-          {/* Live Scanner Status Badge - Click to open Diagnostics & Test */}
-          <div
-            onClick={() => setDiagnosticsOpen(true)}
-            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer select-none transition-all border ${
-              isScanning
-                ? 'bg-amber-500/15 border-amber-500/30 text-amber-500'
-                : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
-            }`}
-            title="Bluetooth & USB Scanner Live - Click to open live diagnostics & test"
-          >
-            <span className="relative flex h-2 w-2">
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  isScanning ? 'bg-amber-400' : 'bg-emerald-400'
-                }`}
-              ></span>
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  isScanning ? 'bg-amber-500' : 'bg-emerald-500'
-                }`}
-              ></span>
-            </span>
-            <ScanBarcode size={13} className="shrink-0" />
-            <span>{isScanning ? 'Scanning...' : 'Scanner Live'}</span>
-          </div>
-
           <div className="relative flex-1 max-w-[400px] md:w-[260px]">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" />
             <input
@@ -587,7 +646,7 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
                   if (inputScanTimerRef.current) clearTimeout(inputScanTimerRef.current);
                   inputScanTimerRef.current = setTimeout(() => {
                     handleBarcodeScan(clean);
-                  }, 180);
+                  }, 100);
                 }
               }}
               onPaste={(e) => {
@@ -623,9 +682,21 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
                   >
                     <div className="flex flex-col">
                       <span className="font-medium text-sm text-foreground">{p.name}</span>
-                      <span className="text-xs text-foreground/50">
-                        Stock: {p.stock} | {p.stock === 0 ? 'Out of stock' : 'In stock'}
-                      </span>
+                      <div className="flex items-center gap-2 text-xs text-foreground/50 mt-0.5">
+                        {p.shelf_stock !== undefined ? (
+                          <>
+                            <span className={p.shelf_stock === 0 ? "text-amber-500 font-semibold" : "text-emerald-500 font-medium"}>
+                              Shelf: {p.shelf_stock}
+                            </span>
+                            <span>•</span>
+                            <span>Store: {p.warehouse_stock || 0}</span>
+                          </>
+                        ) : (
+                          <span>Stock: {p.stock}</span>
+                        )}
+                        <span>•</span>
+                        <span>{p.category}</span>
+                      </div>
                     </div>
                     <span className="font-bold text-sm text-pos-600">
                       {formatMoney(p.price, currency)}
@@ -857,9 +928,10 @@ function PosContent({ session }: { session: { id: string; opening_amount: number
         onClose={() => setCloseSessionOpen(false)}
         sessionId={session.id}
         openingAmount={session.opening_amount}
+        onCashMovementOpen={() => setCashMovementOpen(true)}
         onSessionClosed={() => {
           setCloseSessionOpen(false);
-          window.location.reload();
+          router.push('/dashboard');
         }}
       />
 

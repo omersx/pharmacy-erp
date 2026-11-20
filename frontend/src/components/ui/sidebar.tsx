@@ -13,6 +13,7 @@ import {
   FileText,
   Settings,
   Pill,
+  Truck,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -29,6 +30,7 @@ export function Sidebar() {
     { icon: MonitorPlay, label: t('pos'), href: '/pos' },
     { icon: ShoppingCart, label: t('sales'), href: '/sales' },
     { icon: Package, label: t('inventory'), href: '/inventory' },
+    { icon: Truck, label: t('purchasing'), href: '/purchasing' },
     { icon: Pill, label: t('catalog'), href: '/catalog/products' },
     { icon: Users, label: t('customers'), href: '/customers' },
     { icon: FileText, label: t('reports'), href: '/reports' },

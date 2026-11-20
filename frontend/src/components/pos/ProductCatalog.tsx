@@ -12,6 +12,8 @@ export interface Product {
   category: string;
   price: number;
   stock: number;
+  shelf_stock?: number;
+  warehouse_stock?: number;
   batch: string;
   lot_number: string;
   expiry: string;
@@ -122,6 +124,21 @@ export default function ProductCatalog({ products, categories, onProductClick, i
                   <span className="text-[10px] font-bold text-red-500 bg-red-100 dark:bg-red-500/20 px-2 py-0.5 rounded">
                     OUT OF STOCK
                   </span>
+                ) : product.shelf_stock !== undefined && product.shelf_stock === 0 && (product.warehouse_stock || 0) > 0 ? (
+                  <span className="text-[10px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1" title={`${product.warehouse_stock} available in warehouse (auto-refill on sell)`}>
+                    <span>📦 {product.warehouse_stock} in Store</span>
+                  </span>
+                ) : product.shelf_stock !== undefined ? (
+                  <div className="flex items-center gap-1 text-[10px]" title={`Shelf: ${product.shelf_stock} | Store: ${product.warehouse_stock || 0}`}>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      Shelf: {product.shelf_stock}
+                    </span>
+                    {(product.warehouse_stock || 0) > 0 && (
+                      <span className="text-muted-foreground/60 text-[9px]">
+                        +{product.warehouse_stock}📦
+                      </span>
+                    )}
+                  </div>
                 ) : product.stock <= 10 ? (
                   <span className="text-[10px] font-medium text-orange-500">
                     Only {product.stock} left

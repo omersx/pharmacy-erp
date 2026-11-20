@@ -149,14 +149,14 @@ export function useBarcodeScanner({
         }
 
         // Timer-Based Auto-Submit:
-        // If characters arrive quickly and pause for 220ms, auto-trigger scan
+        // If characters arrive quickly and pause for 120ms, auto-trigger scan
         // even if scanner never sends an Enter key!
         autoSubmitTimerRef.current = setTimeout(() => {
           const currentBuffer = bufferRef.current.trim();
           if (currentBuffer.length >= minLength) {
             fireScan(currentBuffer);
           }
-        }, 220);
+        }, 120);
       }
     },
     [minLength, maxDelay, fireScan]

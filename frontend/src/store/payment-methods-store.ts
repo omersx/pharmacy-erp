@@ -64,7 +64,7 @@ export const usePaymentMethodsStore = create<PaymentMethodsState>()(
     (set, get) => ({
       methods: defaultMethods,
       completedSales: [],
-      requireCashSession: false, // Default to false (optional)
+      requireCashSession: true, // Cash sessions required by default (Odoo parity)
 
       setRequireCashSession: (val) => set({ requireCashSession: val }),
 
